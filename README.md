@@ -18,9 +18,11 @@ SET-UP
 1. Download the latest release of StreamLine
 2. Run the Blender installation shortcut which will download the windows64 version of Blender-2.80
      (if you're running Win32 my scripts are hardcoded to the Win64 folder name, though you can probably alter `blend.bat` to change the `cd` command to the proper name for the Win32 folder,  I can't guarantee everything will work correctly)
-3. Run TTYB.exe
+3. Open the Blender zip and move the folder inside `blender-2.80-windows64` into the root of StreamLine
+     (ensure not to extract the folder as this can lead to an extra subfolder, which will break directories of the scripts, you can also delete the shortcut that leads to the blender download if you'd like)
+4. Run TTYB.exe
      (if it says `Windows protected...` just click `More/View Details` or whatever it says and hit `Run Anyways`)
-4. Click ReplaceDir and choose the location of your COLLADA (.dae) model
+5. Click ReplaceDir and choose the location of your COLLADA (.dae) model
      (REMINDER - these scripts are currently (as of 8/8/24) based on the exported models from Peardian available at (https://www.models-resource.com/gamecube/papermariothethousandyeardoor/) and are only designed for the map models, listed below)
      (This may change as I work on a different program to parse the data differently, which if made publically available will probably be a branch from this)
 6. Click BATCH and a Command Prompt should open up, let it run
