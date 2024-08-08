@@ -1,5 +1,5 @@
 Hi! Excited you're interested in using my (VERY) WIP script-set to make editing TTYD maps easier.
-This entire process has only been made possible thanks to the efforts of PistonMiner, Jasper (noclip), Jemaroo, Jdaster64, Rain, Peardian, and many others in the Petalburg (https://discord.gg/kGzG2BtsBX), Noclip (https://discord.gg/zGFeKVRv5v), and other discord servers
+This entire process has only been made possible thanks to the efforts of PistonMiner, Jasper (noclip), Jemaroo, Jdaster64, NWPlayer, Rain, Peardian, and many others in the Petalburg (https://discord.gg/kGzG2BtsBX), Noclip (https://discord.gg/zGFeKVRv5v), and other discord servers
 
 Now to get into utilizing the tool itself
 
