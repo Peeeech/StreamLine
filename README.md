@@ -125,4 +125,65 @@ When adding a new object you have to ensure the mesh data for the objects that c
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+MAP LINKS
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+`MAPS`
+ - `Mario's House:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/43685/
+ - `Rogueport:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/50086/
+ - `Rogueport Sewers:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/50088/
+ - `Petal Meadows:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52537/
+ - `Petalburg:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52539/
+ - `Shhwonk Fortress:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52540/
+ - `Hooktail Castle:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52544/
+ - `Boggly Woods:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52549/
+ - `Great Tree:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/54739/
+ - `Glitzville:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/57579/
+ - `Twilight Town:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60293/
+ - `Twilight Trail:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60294/
+ - `Creepy Steeple:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60299/
+ - `Keelhaul Key:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60473/
+ - `Pirate's Grotto:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60476/
+ - `Excess Express:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60483/
+ - `Riverside Station:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62989/
+ - `Poshley Heights:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62991/
+ - `Fahr Outpost:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62993/
+ - `The Moon:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62995/
+ - `X-Naut Fortress:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62997/
+ - `Palace of Shadow:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/63002/
+ - `The Pit of 100 Trials:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/50090/
+ - `Boat Cutscenes:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/50085/
+ - `Bowser Stages:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/57581/
+ - `Bowser's Castle:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/43686/
+ - `Rawk Hawk's Training Room:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/57582/
+ - `Pianta Parlor Games:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52535/
+
+`BATTLE BACKGROUNDS`
+ - `Rogueport:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/50087/
+ - `Rogueport Sewers:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/50089/
+ - `Petal Meadows:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52538/
+ - `Shhwonk Fortress:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52541/
+ - `Hooktail Castle:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52545/
+ - `Boggly Woods:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/52550/
+ - `Great Tree:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/54740/
+ - `Glitzville:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/57580/
+ - `Twilight Trail:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60295/
+ - `Creepy Steeple:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60300/
+ - `Keelhaul Key:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60474/
+ - `Pirates Grotto:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60477/
+ - `Excess Express:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/60484/
+ - `Riverside Station:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62990/
+ - `Poshley Heights:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62992/
+ - `Fahr Outpost:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62994/
+ - `The Moon:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62996/
+ - `Palace of Shadow:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/63003/
+ - `X-Naut Fortress:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/62998/
+ - `Pit of 100 Trials:`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/50091/
+ - `Stage (A-List Star):`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/47769/
+ - `Stage (B-List Star):`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/47768/
+ - `Stage (Rising Star):`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/47767/
+ - `Stage (Superstar):`      https://www.models-resource.com/gamecube/papermariothethousandyeardoor/model/47770/
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 All of this will (hopefully, granted I remember) be updated in due time, to reflect on future updates if anything drastically changes, or if I remember/learn how to do something.
