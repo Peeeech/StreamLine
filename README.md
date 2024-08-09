@@ -91,22 +91,22 @@ COLLADA files don't inherently pack textures into them, so all the texture files
 
 This will increase the size of the .blend file, as it now contains all the textures used in it, but it also makes the file completely portable, without worrying about the directory the original textures
 
-EDITING TEXTURES
+`EDITING TEXTURES`
 To actually edit the textures themselves you can either export them independently from the `UV Editing` menu to edit one-by-one by selecting the object, opening it, and clicking the `UV` dropdown, then clicking `Save as` to edit individually, or you can export the entire set of textures to a new folder to edit as many as you want
 The easiest way to export all of them is going to `File -> External Data -> Unpack All Into Files -> Write files to current directory`, this will make a folder named `Textures` inside the folder your `.blend` is in, which if you haven't moved, will just be directly in the `output` folder of StreamLine 
 To import the textures back in you'll either have to replace the texture from the source folder or replace the image in the `Shading` menu explained below
 
-REPLACING TEXTURES
+`REPLACING TEXTURES`
 To replace a specific texture for ALL objects that use that same texture, go into the `Shading` menu at the top of Blender and select the object that uses the texture you want to replace, and at the bottom of the screen you'll see the Node tree
 In the `Base Color` node, the leftmost node with the orange header, it'll list out information about how the texture is wrapped for the material, `Linear`, `Flat`, `Repeat`, `Single Image`, etc.
      Directly above that you'll see a text line that has the name of the texture, with a box to the left that you can use to replace with a texture already in the project
      There's 4 boxes to the right of that text-line, the first one you don't really need to utilize for this unless you know what you're doing, the second one is if you want to create a new image inside Blender, which I wouldn't recommend, the third one is another to ignore unless you know what you're doing.
      The one you're most likely going to use is the 4th one, which lets you get rid of the texture associated with the material. You can then select `Open` to choose a new texture from your computer.
 
-CREATING NEW
+`CREATING NEW`
 Creating a new material you'll have to match the node tree to the NodeExample.png to ensure it's compatible with TTYD's textures
 
-TRANSPARENCY
+`TRANSPARENCY`
 If you replace a non-transparent texture with something that has transparency, or create a new material with transparency, the easiest way to ensure it's compatible is to make the node tree matches the tree in the NodeTransparentExample.png image
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
