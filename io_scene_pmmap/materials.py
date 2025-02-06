@@ -5,7 +5,7 @@ import bpy # type: ignore
 
 from . import effects
 from . import images
-
+from PIL import Image #type: ignore
 
 
 def process(extracted_string):
