@@ -42,20 +42,7 @@ def has_transparency(img):
 # Function to create material
 def makeMaterial(matName, tex_p, step):
     if matName in bpy.data.materials:
-        return
-    
-    try:
-        from PIL import Image # type: ignore
-    except ImportError:
-        print("PIL (Pillow) is not installed. Attempting to install...")
-        try:
-            import subprocess
-            subprocess.Popen([bpy.app.binary_path_python, "-m", "ensurepip"]).communicate()
-            subprocess.Popen([bpy.app.binary_path_python, "-m", "pip", "install", "Pillow"]).communicate()
-            from PIL import Image # type: ignore
-            print("PIL (Pillow) has been successfully installed.")
-        except Exception as e:
-            print(f"Error installing PIL (Pillow): {e}")        
+        return        
     
     number_list = [] 
     text_list = []
