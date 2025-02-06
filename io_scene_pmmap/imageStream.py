@@ -2,7 +2,6 @@ import struct
 import os
 import sys
 import subprocess
-from PIL import Image
 import numpy as np
 import argparse
 import tempfile
