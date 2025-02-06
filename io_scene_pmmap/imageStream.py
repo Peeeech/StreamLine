@@ -5,7 +5,6 @@ import subprocess
 import numpy as np
 import argparse
 import tempfile
-import bpy #type: ignore
 
 # Constants for TPL file format
 TPL_MAGIC = 0x0020AF30
