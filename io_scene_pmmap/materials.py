@@ -5,8 +5,6 @@ import bpy # type: ignore
 
 from . import effects
 from . import images
-from PIL import Image #type: ignore
-
 
 def process(extracted_string):
     materials = []
@@ -41,6 +39,7 @@ def has_transparency(img):
 
 # Function to create material
 def makeMaterial(matName, tex_p, step):
+    from PIL import Image #type: ignore
     if matName in bpy.data.materials:
         return        
     
