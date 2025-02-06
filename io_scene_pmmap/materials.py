@@ -55,8 +55,7 @@ def makeMaterial(matName, tex_p, step):
             from PIL import Image # type: ignore
             print("PIL (Pillow) has been successfully installed.")
         except Exception as e:
-            print(f"Error installing PIL (Pillow): {e}")
-            quit()        
+            print(f"Error installing PIL (Pillow): {e}")        
     
     number_list = [] 
     text_list = []
