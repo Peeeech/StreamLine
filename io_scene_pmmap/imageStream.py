@@ -99,7 +99,6 @@ def extract_tpl_to_png(tpl_file):
     except ImportError:
         print("PIL (Pillow) is not installed. Attempting to install...")
         try:
-            import subprocess
             subprocess.Popen([sys.executable, "-m", "ensurepip"]).communicate()
             subprocess.Popen([sys.executable, "-m", "pip", "install", "Pillow"]).communicate()
             from PIL import Image # type: ignore
