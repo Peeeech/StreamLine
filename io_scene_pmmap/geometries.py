@@ -262,6 +262,7 @@ def createObject(geo, step, normals=None, uvs=None, colors=None, coloruvs=None, 
                             color_layer.data[i].color = (1.0, 1.0, 1.0, 1.0)
             else:
                 color_layer = mesh.vertex_colors.new(name="Col")
+                uv_layer = mesh.uv_layers.new(name="UVMap")
                 for poly in mesh.polygons:
                     for i in poly.loop_indices:
                         color_layer.data[i].color = (1.0, 1.0, 1.0, 1.0)
