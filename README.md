@@ -49,10 +49,13 @@ SET-UP
 TO EXPORT
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Using PistonMiner's IO_Scene_TTYD: (https://github.com/PistonMiner/ttyd-tools/)
-1. Make sure that after importing with this addon that you save the .blend file and reopen it before trying to export, or it will just export a blank file.
-2. Ensure all materials follow the format present in either node example
-3. Ensure all objects have a UV Map named 'UVMap' and a Vertex group named 'Col'
+These only apply if using custom models/materials/animations
+1. Ensure all materials follow the format present in either node example
+2. Ensure all objects have a UV Map named 'UVMap' and a Vertex group named 'Col'
+3. Ensure all animation tracks have been pushed down into NLA strips
 4. Select each collection respectively with the operator presets and click export
+
+If exporting a map directly after importing, just go ahead and select the collections and you'll be set!
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Extras from my deprecated repo:
