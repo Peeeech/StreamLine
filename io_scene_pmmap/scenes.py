@@ -3,12 +3,11 @@ import sys
 import re
 import bpy # type: ignore
 import math
-import mathutils # type: ignore
 from . import __init__
 from . import images
 from . import effects
 from . import materials
-from . import geometries
+from . import animations
 from . import streamLine
 
 
@@ -132,6 +131,15 @@ def process(extracted_string):
         createObj(ind, node_id, geo_id, mat_id, trans, rot, scale, parent_stack)
     root = bpy.context.scene.objects.get("world_root")
     root.rotation_euler = (math.radians(90), 0, 0)
+    root.select_set(True)
+    bpy.context.view_layer.objects.active = root
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    # ========================= Final Animation Creation =========================
+    animDict = animations.anim
+    for anim_id, data in animDict.items():
+        animations.makeAnims(anim_id, data)
+        animations.pushNLAs(anim_id, data)
 
     # ========================= Collection Creation =========================
     if bpy.context.scene.coll_creation:
@@ -181,7 +189,6 @@ def update():
         if area.type == 'VIEW_3D':
             area.tag_redraw()
     bpy.context.view_layer.update()
-
         
 def createObj(ind, node, geo, mat, trans, rot, scale, parent_stack):    
     scene = bpy.context.scene
