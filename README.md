@@ -1,4 +1,4 @@
-#PLEASE READ INSTRUCTIONS BELOW:
+# PLEASE READ INSTRUCTIONS BELOW:
 To export this with PistonMiner's exporter, you will need to change one of the scripts within it. You will have to open 'dmd.py' which is right inside the io_scene_ttyd folder in your addons folder.
 You need to replace lines 750-751, which are:
 
