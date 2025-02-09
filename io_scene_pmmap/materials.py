@@ -87,6 +87,15 @@ def makeMaterial(matName, tex_p, step):
         mix_node.name = "Mix"  
         mix_node.blend_type = 'MULTIPLY'
         mix_node.inputs["Fac"].default_value = 1
+        mapping_node = nodes.new(type='ShaderNodeMapping')
+        uvmap_node = nodes.new(type='ShaderNodeUVMap')
+
+        links = node_tree.links
+        links.new(mapping_node.outputs["Vector"], texture_node.inputs["Vector"])
+        links.new(uvmap_node.outputs["UV"], mapping_node.inputs["Vector"])
+
+        mapping_node.location = (mapping_node.location.x - 700, mapping_node.location.y + 300)
+        uvmap_node.location = (uvmap_node.location.x - 900, uvmap_node.location.y + 150)
 
         node_tree.links.new(texture_node.outputs['Color'], mix_node.inputs['Color1'])
         node_tree.links.new(col_attribute_node.outputs['Color'], mix_node.inputs['Color2'])
@@ -122,6 +131,7 @@ def makeMaterial(matName, tex_p, step):
                 nodes.remove(principled_bsdf_node)
             elif node.type == 'OUTPUT_MATERIAL':
                 material_output_node = node
+        diffuse_bsdf_node = nodes.new(type='ShaderNodeBsdfDiffuse')
         mix_node = nodes.new(type='ShaderNodeMixRGB')
         mix_node.name = "Mix"  
         mix_node.blend_type = 'MULTIPLY'
@@ -132,10 +142,13 @@ def makeMaterial(matName, tex_p, step):
         rgb_node = nodes.new(type='ShaderNodeRGB')
         rgb_node.outputs["Color"].default_value = (r, g, b, a)
         
-        rgb_node.location = (rgb_node.location.x - 200, rgb_node.location.y + 400)
-        col_attribute_node.location = (col_attribute_node.location.x - 200, col_attribute_node.location.y + 200)
+        rgb_node.location = (rgb_node.location.x - 200, rgb_node.location.y + 250)
+        col_attribute_node.location = (col_attribute_node.location.x - 200, col_attribute_node.location.y + 400)
         mix_node.location = (mix_node.location.x, mix_node.location.y + 350)
+        diffuse_bsdf_node.location = (mix_node.location.x + 200, mix_node.location.y)
+        material_output_node.location = (material_output_node.location.x + 100, material_output_node.location.y)
 
-        node_tree.links.new(rgb_node.outputs['Color'], mix_node.inputs['Color1'])
-        node_tree.links.new(col_attribute_node.outputs['Color'], mix_node.inputs['Color2'])
-        node_tree.links.new(mix_node.outputs['Color'], material_output_node.inputs['Surface'])
+        node_tree.links.new(col_attribute_node.outputs['Color'], mix_node.inputs['Color1'])
+        node_tree.links.new(rgb_node.outputs['Color'], mix_node.inputs['Color2'])
+        node_tree.links.new(mix_node.outputs['Color'], diffuse_bsdf_node.inputs['Color'])
+        node_tree.links.new(diffuse_bsdf_node.outputs['BSDF'], material_output_node.inputs['Surface'])
