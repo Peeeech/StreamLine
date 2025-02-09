@@ -1,3 +1,25 @@
+#PLEASE READ INSTRUCTIONS BELOW:
+To export this with PistonMiner's exporter, you will need to change one of the scripts within it. You will have to open 'dmd.py' which is right inside the io_scene_ttyd folder in your addons folder.
+You need to replace lines 750-751, which are:
+
+initially:
+                            tc_layer_name = blender_uv_layers[tc_index]
+							tc_layer = blender_mesh.uv_layers[tc_layer_name]
+replace it with:
+                            tc_layer = blender_mesh.uv_layers.active
+
+You should be able to just use CTRL+F to search "tc_layer_name" without quotations to find the first of the two lines that need replaced, as it's the only occurrence of it in the script. 
+
+After replacing the lines, the entire 'if' statement should read as follows (starting on line 749, finishing on line 756):
+                            if tc_index < len(blender_uv_layers):
+								tc_layer = blender_mesh.uv_layers.active
+								tc_data = tuple(tc_layer.data[loop_index].uv)
+							else:
+								# todo-blender_io_ttyd: Figure out if this is a
+								# fatal error; probably should be.
+								assert(False)
+								tc_data = (0.0, 0.0)
+
 # StreamLine
 Second iteration of streamLine project, complete overhaul of previous method
 
