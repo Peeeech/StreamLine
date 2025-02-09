@@ -126,7 +126,7 @@ class ImportBinaryFileOperator(bpy.types.Operator):
         if os.path.exists(model_path):
             print("----- Extracting Sections from temp.txt -----")
             extract_sections(model_path)
-            os.remove(model_path)           #Call to delete temp.txt: Useful for debugging, as it's the string all the py data pulls from
+            #os.remove(model_path)           #Call to delete temp.txt: Useful for debugging, as it's the string all the py data pulls from
         else:
             return {'CANCELLED'}
         return {'FINISHED'}
@@ -170,7 +170,7 @@ def extract_sections(file_path):
         ("library_effects", "/library_effects"),
         ("library_materials", "/library_materials"),
         ("library_geometries", "/library_geometries"),
-#        ("library_animations", "/library_animations"),
+        ("library_animations", "/library_animations"),
         ("library_visual_scenes", "/library_visual_scenes"),
     ]
     try:
@@ -199,10 +199,9 @@ def extract_sections(file_path):
                 if start_tag == "library_geometries":
                     print("geometries")
                     geometries.process(extracted_string)
-#           Animations not implemented yet :(
-#                elif start_tag == "library_animations":
-#                   print("animations")
-#                    animations.process(extracted_string)
+                if start_tag == "library_animations":
+                    print("animations")
+                    animations.process(extracted_string)
                 if start_tag == "library_visual_scenes":
                     print("scenes")
                     scenes.process(extracted_string)
