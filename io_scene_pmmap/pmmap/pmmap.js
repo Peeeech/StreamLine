@@ -1571,8 +1571,6 @@ const materialNames = new Set();
 var outputAnims;
 var outputMats;
 var nodeCheck = [];
-var outputType;
-var outputType2;
 var dimension;
 var meshTanIn;
 var meshTanOut;
@@ -1582,6 +1580,8 @@ var frameLength;
 var matchingNode;
 var frameArray = [];
 var translationArray = [];
+var rotationArray = [];
+var scaleArray = [];
 var ifRotate;
 var originalPos = [];
 var meshAnims = [];
@@ -1619,13 +1619,12 @@ function makeDae() {
 var animationLib = `library_animations\n\
 `;
 
-function meshKeyframes(frames, type) {
-    outputType = type;
-    outputType2 = type;
+function meshKeyframes(frames) {
     frameLength = frames.length;
-    frameArray = frames.map(frame => (frame.time/24));
-    translationArray = []; // Reset translationArray for each call
-    
+    frameArray = frames.map(frame => (frame.time)); // have to divide by 24 because blender's framerate logic is DUMB
+    translationArray = []; // Reset translationArray for each call  
+    rotationArray = [];
+    scaleArray = [];  
 
     //console.log(outputAnims);
 
@@ -1643,127 +1642,76 @@ function meshKeyframes(frames, type) {
             });
             if(anyTrackInMeshAnimTrack){
 
-            if (matchingNode) {
-                localNodeCheckVar.push(matchingNode.posX, matchingNode.posY, matchingNode.posZ);
+                if (matchingNode) {
+                    localNodeCheckVar.push(matchingNode.posX, matchingNode.posY, matchingNode.posZ);
+                
+                frames.forEach(frame => {
+                    translationArray.push(frame.translationX.value, frame.translationY.value, frame.translationZ.value);
+                    rotationArray.push(frame.rotationX.value, frame.rotationY.value, frame.rotationZ.value);
+                    scaleArray.push(frame.scaleX.value, frame.scaleY.value, frame.scaleZ.value);
+                });
             }
-            frames.forEach(frame => {
-            //console.log(frame);
-            translationArray.push(frame.translationX.value, frame.translationY.value, frame.translationZ.value);
-            });
-            localNodeCheckVar = [];
+                localNodeCheckVar = [];
             }
         }
     });
-    if (outputType === 'translate') {
-        outputType = 'translation';
-        outputType2 = 'translation'; //rotate might be redundant, implement if i find one? til then just use type2 as placeholder for it
-        ifRotate = '';
-    } else if (outputType === 'rotate') { 
-        outputType = 'rotation';
-        outputType2 = 'rotate' + dimension + '.ANGLE';
-        ifRotate = 'AXIS';
-    }
     return ''; // No keyframes returned
 }
 
 function materialKeyframes(frames) {
-frameArray = frames.map(frame => (frame.time/24));
-frameLength = frames.length;
-translationArray = [];
-let processedMaterials = new Set();
-outputAnims.forEach((anim, index) => {
-    if (anim.materialAnimation ) {
-        if(!animNameS.has(anim.name))
-            {
-            animNameS.add (anim.name);
+    frameArray = frames.map(frame => (frame.time));
+    frameLength = frames.length;
+    translationArray = [];
+    rotationArray = [];
+    scaleArray = [];
 
-            //console.log(anim.materialAnimation);
-            anim.materialAnimation.tracks.forEach((track) => {
-                track.frames.forEach((frame) => {
-                    frame.materialName = track.materialName;
-                  materialArray.push(frame);
-
-
-
-
-                        //iterate through all materials assigned earlier 
-                        //and add them names to a list for ease of checking
-                    outputMats.forEach((mats) => {
-                        if (!processedMaterials.has(mats.index)) {
-                            // Push the index and name if it's not already processed
-                            materialList.push({ index: mats.index, name: mats.name });
-                            // Mark this material as processed to avoid duplicates
-                            processedMaterials.add(mats.index);
-                        }
-
-                        
-                        })
-                    });
-               });
-            }
-        }    
-    });
+            
+    frames.forEach(frame => {
+        translationArray.push(frame.translationS.value, frame.translationT.value); 
+        rotationArray.push(frame.rotation.value);
+        scaleArray.push(frame.scaleS.value, frame.scaleT.value);
+    });            
 }
-console.log(materialArray);
-
-
-
 
 //animLib setup
 outputAnims.forEach(animation => {
     if (animation.meshAnimation && animation.meshAnimation.tracks) {
         animation.meshAnimation.tracks.forEach(track => {
-            meshKeyframes(track.frames, 'translate');
-            animationLib += `\n\
-animation id="${track.meshName}"
-    source id="${track.meshName}_time"
-        float_array id="${track.meshName}_time-array"\n\
-        count="${frameLength}"${frameArray.join(' ')}
-                accessor source="#${track.meshName}_time-array" count="${frameLength}" stride="1"
-                param name="TIME" type="float"\n\
-        source id="${track.meshName}_${outputType}"
-        float_array id="${track.meshName}_${outputType}-array"\n\
-        count="${frameLength * 3}"${translationArray.join(' ')}
-            accessor source="#${track.meshName}_${outputType}-array" count="${frameLength*3}" stride="3"
-            param name="${ifRotate}X" type="float"
-            param name="${ifRotate}Y" type="float"
-            param name="${ifRotate}Z" type="float"\n\
-        sampler id="${track.meshName}_${outputType}-sampler"
-            input semantic="INPUT" source="#${track.meshName}_time"
-            input semantic="OUTPUT" source="#${track.meshName}_${outputType}"
-        channel source="#${track.meshName}_${outputType}-sampler" target="node_${track.meshName}/translate"
-        \n\
-        `;
+            console.log(track);
+            meshKeyframes(track.frames);
+            animationLib += `"${animation.name}"\n\
+mesh animation id= "${track.meshName}"
+translation offset= "${track.translationOffsetX} ${track.translationOffsetY} ${track.translationOffsetZ}"
+rotation offset= "${track.rotationOffsetX} ${track.rotationOffsetY} ${track.rotationOffsetZ}"
+scale divider= "${track.scaleDividerX} ${track.scaleDividerY} ${track.scaleDividerZ}"
+    array id= "time"
+        count= "${frameLength}"\n"${frameArray.join(' ')}"
+    array id= "mesh_translate"
+        count= "${frameLength}"\n"${translationArray.join(' ')}"
+    array id= "mesh_rotate"
+        count= "${frameLength}"\n"${rotationArray.join(' ')}"
+    array id= "mesh_scale"
+        count= "${frameLength}"\n"${scaleArray.join(' ')}"\n`;
         });
     }
 
     if(animation.materialAnimation && animation.materialAnimation.tracks){
 
         animation.materialAnimation.tracks.forEach(track => {
-            materialKeyframes(track.frames, 'translate');
-
-            animationLib += `\n\
-animation id="${matName}"
-    source id="${matName}_time"
-        float_array id="${matName}_time-array" \n\
-        count="${frameLength}"${frameArray.join(' ')}
-            accessor source="#${matName}_time-array" count="${frameLength}" stride="1"
-            param name="TIME" type="float"
-        source id="${matName}_${outputType}ST"
-            float_array id="${matName}_${outputType}-array" \n\
-            count="${frameLength * 2}"${translationArray.join(' ')}
-                accessor source="#${matName}_${outputType}-array" count="${frameLength*3}" stride="3"
-                param name="${ifRotate}S" type="float"
-                param name="${ifRotate}T" type="float"
-            sampler id="${matName}_${outputType}-sampler"
-                input semantic="INPUT" source="#${matName}_time"
-                input semantic="OUTPUT" source="#${matName}_${outputType}"
-                channel source="#${matName}_${outputType}-sampler" target="node_${matName}/translate"
-    \n\
-    `;
-
-
-
+            console.log(track);
+            materialKeyframes(track.frames)
+            animationLib += `"${animation.name}"\n\
+    material animation id= "${track.materialName}"
+    centerS= "${track.centerS}"
+    centerT= "${track.centerT}"
+        array id= "time"
+            count= "${frameLength}"\n"${frameArray.join(' ')}"
+        array id= "mat_translation"
+            count= "${frameLength * 2}"\n"${translationArray.join(' ')}";
+        array id= "mat_rotation"
+            count= "${frameLength}"\n"${rotationArray.join(' ')}";
+        array id= "mat_scale"
+            count= "${frameLength * 2}"\n"${scaleArray.join(' ')}"\n`;
         })
     }
     });
@@ -1855,7 +1803,7 @@ animation id="${matName}"
     \n\
     \n\
 '
-+imageLib+effectLib+materialLib+geometryLib+sceneLib
++imageLib+effectLib+materialLib+geometryLib+animationLib+sceneLib
 '\n\ ';
 }
 
