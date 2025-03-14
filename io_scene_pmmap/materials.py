@@ -89,6 +89,7 @@ def makeMaterial(matName, tex_p, step):
         mix_node.inputs["Fac"].default_value = 1
         mapping_node = nodes.new(type='ShaderNodeMapping')
         uvmap_node = nodes.new(type='ShaderNodeUVMap')
+        uvmap_node.uv_map = "UVMap"
 
         links = node_tree.links
         links.new(mapping_node.outputs["Vector"], texture_node.inputs["Vector"])
