@@ -1,36 +1,54 @@
-# __init__.py
-import bpy  #type: ignore
-import subprocess
-import json
-import os
-import sys
-import shutil
-import tempfile
 
-from . import images
-from . import effects
-from . import materials
-from . import geometries
-from . import animations
-from . import scenes
+import bpy  # type: ignore
+import os
+import shutil
+import sys
+import importlib.util
+import subprocess
+
+from . import pydmd
+from .parsers import tplparse as ptpl
+from .parsers import camparse as pcam
+
+from .materials import decode as txDc
+from .materials import imageStream as txIS
+from .materials import images as txImg
+from .materials import materials as txMat
+
+from .blender import cam
+from .blender import geometries
+from .blender import streamLine
+from .blender import panel
+from .blender import lights
+from .blender import animations
+
+geomDebug = True
+
+addon_dir = os.path.dirname(__file__)
 
 bl_info = {
-    "name": "PMMap Parser",
+    "name": "PMMap Importer",
     "author": "Peeeech",
-    "version": (0, 2),
-    "blender": (2, 80, 0),
+    "version": (1, 0),
+    "blender": (4, 0, 0),
     "location": "File > Import",
-    "description": "Imports PMTTYD map files using JavaScript and Python parsers",
-    "warning": "",
+    "description": "Imports Paper Mario Maps using a Python buffer parser",
+    "warning": "This is an early alpha version. Expect bugs and missing features. Please report any issues on the GitHub page. It also has a requirement for Pillow to import textures, which is attempted to be automatically installed if not found, but may require manual installation in some cases.",
     "wiki_url": "",
     "tracker_url": "",
     "category": "Import-Export",
 }
 
+def import_from_path(name, path):
+    spec = importlib.util.spec_from_file_location(name, os.path.join(addon_dir, path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 class ImportBinaryFileOperator(bpy.types.Operator):
-    """Import a d file using Node.js script"""
-    bl_idname = "import_export.d_file"
-    bl_label = "Import Binary File (d)"
+    """Imports DMD files using a Python buffer parser"""
+    bl_idname = "import_export.dmd_file"
+    bl_label = "Import DMD File (d)"
     bl_options = {'REGISTER', 'UNDO'}
 
     filepath: bpy.props.StringProperty(
@@ -46,171 +64,298 @@ class ImportBinaryFileOperator(bpy.types.Operator):
         maxlen=255,
     )  # type: ignore
 
-    def execute(self, context):
-        # 1) Get paths
-        binary_file = self.filepath
-        addon_dir   = os.path.dirname(__file__)
-        pmmap_dir      = os.path.join(addon_dir, "pmmap")
-        main_js     = os.path.join(pmmap_dir, "main.js")
-
-        if not os.path.exists(main_js):
-            self.report({'ERROR'}, f"main.js not found at {main_js}")
-            return {'CANCELLED'}
-
-        # 2) Check for 't' file
-        if bpy.context.scene.t_import:
-            t_file = os.path.join(os.path.dirname(binary_file), "t")
-            if os.path.exists(t_file):
-                tex_dir = os.path.join(addon_dir, "tex")
-
-                # Clean out 'tex/' if it exists
-                if os.path.exists(tex_dir):
-                    for filename in os.listdir(tex_dir):
-                        file_path = os.path.join(tex_dir, filename)
-                        try:
-                            if os.path.isdir(file_path):
-                                shutil.rmtree(file_path)
-                            else:
-                                os.remove(file_path)
-                        except Exception as e:
-                            print(f"Error removing {file_path}: {e}")
-                else:
-                    os.makedirs(tex_dir)
-
-            # 'python imageStream.py [t]'
-            python_exe = bpy.app.binary_path_python
-            try:
-                subprocess.run(
-                    [python_exe, "imageStream.py", t_file],
-                    cwd=addon_dir,
-                    check=True,
-                    text=True
-                )
-                print("Successfully processed 't' with imageStream.py + decode.py.")
-            except subprocess.CalledProcessError as e:
-                print("=== CalledProcessError ===")
-                print(f"Return code: {e.returncode}")
-                print("--- STDOUT ---")
-                print(e.stdout)
-                print("--- STDERR ---")
-                print(e.stderr)
-                self.report({'ERROR'}, "Error running imageStream.py (see console for details).")
-                return {'CANCELLED'}
-
-
-        else:
-            print("'t' file not found in the same directory as the imported file.")
-
-        # 5) Ensure Node.js installed
-        try:
-            subprocess.run(['node', '--version'], check=True,
-                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            self.report({'ERROR'}, "Node.js is not installed or not found in PATH.")
-            return {'CANCELLED'}
-
-        # 6) Execute main.js with the binary file path
-        try:
-            result = subprocess.run(
-                ['node', main_js, binary_file],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-        except subprocess.CalledProcessError as e:
-            self.report({'ERROR'}, f"Error running main.js:\n{e.stderr.strip()}")
-            return {'CANCELLED'}
-
-        # 7) Extract sections from temp.txt
-        model_path = os.path.join(addon_dir, "temp.txt")
-        if os.path.exists(model_path):
-            print("----- Extracting Sections from temp.txt -----")
-            extract_sections(model_path)
-            #os.remove(model_path)           #Call to delete temp.txt: Useful for debugging, as it's the string all the py data pulls from
-        else:
-            return {'CANCELLED'}
-        return {'FINISHED'}
-
     def invoke(self, context, event):
+        """Opens file browser for user selection before execution"""
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        """Only runs when a file is selected"""
+        if not self.filepath:
+            self.report({'ERROR'}, "No file selected.")
+            return {'CANCELLED'}
+        
+        self.import_d_file(context)
+
+        return {'FINISHED'}
     
+    #region: DMD Import Logic
+    def import_d_file(self, context):
+        """Handles the actual file import logic"""
+        binary_file = self.filepath
+
+        # Proceed with DMD import logic...
+        print(f"Importing DMD file: {binary_file}")
+
+        dmd = pydmd.remoteCall(binary_file)
+
+        if bpy.context.scene.orph_mat_clear:
+            for mat in list(bpy.data.materials):
+                if mat.users == 0:
+                    bpy.data.materials.remove(mat)
+
+        if bpy.context.scene.tex_import:
+            try:
+                import PIL
+            except ImportError:
+                print("PIL (Pillow) is not installed. Attempting to install...")
+                try:
+                    subprocess.Popen([sys.executable, "-m", "ensurepip"]).communicate()
+                    subprocess.Popen([sys.executable, "-m", "pip", "install", "Pillow"]).communicate()
+                    import PIL # type: ignore
+                    print("PIL (Pillow) has been successfully installed.")
+                except Exception as e:
+                    print(f"Error installing PIL (Pillow): {e}") 
+
+            try:
+                import numpy
+            except ImportError:
+                print("NumPy is not installed. Attempting to install...")
+                try:
+                    subprocess.Popen([sys.executable, "-m", "ensurepip"]).communicate()
+                    subprocess.Popen([sys.executable, "-m", "pip", "install", "numpy"]).communicate()
+                    import numpy # type: ignore
+                    print("NumPy has been successfully installed.")
+                except Exception as e:
+                    print(f"Error installing NumPy: {e}") 
+
+            #Path helpers for texture/cam_road file
+            t_file = os.path.join(os.path.dirname(binary_file), "t")
+            if not os.path.isfile(t_file):
+                print(f"Texture file not found at expected TTYD location: {t_file}\nTrying SPM texture path...")
+                t_file = os.path.abspath((binary_file)[:-4] + ".tpl")
+                if not os.path.isfile(t_file):
+                    print(f"Texture file not found at expected SPM location: {t_file}\nAborting at texture import.")
+                    return {'FAILED'}
+                
+            c_file = os.path.join(os.path.dirname(binary_file), "c")
+            if not os.path.isfile(c_file):
+                print(f"Camera file not found at expected TTYD location: {c_file}\nTrying SPM camera path...")
+                c_file = os.path.join(os.path.dirname(binary_file), "camera_road.bin")
+                if not os.path.isfile(c_file):
+                    print(f"Camera file not found at expected SPM location: {c_file}\nAborting camera import.")
+                    c_file = None
+                
+            addon_dir = os.path.dirname(__file__)
+            tex_dir = os.path.join(addon_dir, "materials", "tex")
+            tex_dir = os.path.abspath(tex_dir)
+
+            #Check for/Clear out/Create "tex" directory
+            if os.path.exists(tex_dir):
+                for filename in os.listdir(tex_dir):
+                    file_path = os.path.join(tex_dir, filename)
+                    try:
+                        if os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                        else:
+                            os.remove(file_path)
+                    except Exception as e:
+                        print(f"Error removing {file_path}: {e}")
+            else:
+                os.makedirs(tex_dir)
+
+            header, tpl = ptpl.parse_tpl(t_file)
+            if c_file:
+                cam_road = pcam.parse_cam_road(c_file)
+
+            txIS.extract_tpl_to_png(t_file, tex_dir)
+
+            #Decode images
+            print(f"\nDecoding Tex folder: {tex_dir}\n")            
+            txDc.decode(tex_dir)
+
+            #Rename images            
+            print(f"\nRenaming Tex files in: {tex_dir}\n")
+            tex_list = dmd.texture_table.textures
+            txImg.rename(tex_list, tex_dir)
+
+            #Import images
+            matprefix = context.scene.mat_prefix
+
+            print(f"\nImporting images from: {tex_dir}\n")
+            for fname in os.listdir(tex_dir):
+                full_path = os.path.join(tex_dir, fname)
+                img_name = os.path.splitext(fname)[0]
+
+                img = bpy.data.images.get(img_name)
+                if img is None:
+                    img = bpy.data.images.load(full_path)
+                    img.name = f"{matprefix}{img_name}"
+
+                img.use_fake_user = True
+
+            #Create imageEmpties
+            print(f"\nCreating images (empty containers) with tpl data\n")
+            images = txImg.build_images_from_scene(tpl, tex_list, context)
+
+            #Create materialEmpties
+            print(f"\nCreating materials (empty containers) with image data\n")
+            matData = dmd.data.materialData
+            materials = txMat.build_materials_from_scene(matData, tex_list, context)
+
+            bpy.context.view_layer.update()
+
+            for window in bpy.context.window_manager.windows:
+                for area in window.screen.areas:
+                    area.tag_redraw()
+
+            #create cam_road
+            if c_file:
+                cam.create_camroad_from_binary(cam_road, context)
+
+            #Create geometry
+            global geomDebug
+            geometries.build_geometry_from_dmd(dmd, context, geomDebug)
+
+            #Create lights
+            lights.build_lights_from_scene(dmd.data.lightData, matprefix, context)
+
+            #Flip world axis before baking animations
+            streamLine.main(matprefix)
+
+            #Create animation tracks
+            animations.build_anims_from_scene(dmd.data.animationData, matprefix, context)
+
+        return {'FINISHED'}
+    
+
+
     def draw(self, context):
         layout = self.layout
-        layout.prop(context.scene, "t_import", text="Import Textures")
-        layout.prop(context.scene, "coll_creation", text="Create Collections")
+        layout.prop(context.scene, "tex_import", text="Import Textures")
+        layout.prop(context.scene, "orph_mat_clear", text="Clear Existing Materials")
+        layout.prop(context.scene, "mat_prefix", text="Prefix for unique material names")
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportBinaryFileOperator.bl_idname, text="Import Map File (d)")
+    self.layout.operator(ImportBinaryFileOperator.bl_idname, text="Import DMD Map File (d)")
+
+#region: register
+_registered = False
+
+classes = (
+    ImportBinaryFileOperator,
+    panel.TTYDMeshMemberRef,
+    panel.TTYDEmptyMatMeshMemberRef,
+    panel.TTYDEmptyMainMaterialRef,
+    panel.TEVConfig,
+    panel.texCoordTransform,
+    panel.SamplerTEX,
+    panel.Sampler,
+    panel.curveData,
+
+    panel.TTYD_OT_add_sampler,
+    panel.TTYD_OT_remove_sampler,
+    panel.TTYD_OT_add_joint_anim_track,
+    panel.TTYD_OT_remove_joint_anim_track,
+    panel.TTYD_OT_sync_joint_anim_tracks,
+    panel.TTYD_OT_sync_joint_anim_delta_from_loc,
+    panel.TTYD_OT_select_object,
+    panel.TTYD_OT_rebuild_local_ir,
+    panel.TTYD_OT_rebuild_camroad_ir,
+    panel.TTYD_OT_stripify_mesh,
+    panel.TTYDLocalVertex,
+    panel.TTYDLocalPrimitive,
+
+    panel.TTYDWorldMeshProperties,
+    panel.TTYDWorldEmptyProperties,
+    panel.TTYDWorldCurveProperties,
+    panel.TTYDJointAttributes,
+    panel.TTYDLightProperties,
+    
+    panel.TTYDJointAnimTrack,
+    panel.TTYDUVAnimTrack,
+    panel.TTYDAlphaAnimTrack,
+    panel.TTYDLightTransAnimTrack,
+    panel.TTYDLightParamAnimTrack,
+
+    panel.TTYDJointAnimTable,
+    panel.TTYDUVAnimTable,
+    panel.TTYDAlphaAnimTable,
+    panel.TTYDLightTransAnimTable,
+    panel.TTYDLightParamAnimTable,
+    
+    panel.TTYDEmptyAnimationProperties,
+    panel.TTYDEmptyTextureProperties,
+    panel.TTYDEmptyMaterialProperties,
+
+    panel.TTYDMaterialProperties,
+    panel.TTYDMaterialPanel,
+    panel.TTYDWorldPanel,
+)
 
 def register():
-    bpy.utils.register_class(ImportBinaryFileOperator)
+    global _registered
+    if _registered:
+        return
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+    bpy.types.Object.ttyd_world_mesh = bpy.props.PointerProperty(
+        type=panel.TTYDWorldMeshProperties
+    )
+
+    bpy.types.Object.ttyd_world_empty = bpy.props.PointerProperty(
+        type=panel.TTYDWorldEmptyProperties
+    )
+
+    bpy.types.Object.ttyd_world_curve = bpy.props.PointerProperty(
+        type=panel.TTYDWorldCurveProperties
+    )
+
+    bpy.types.Object.ttyd_attributes = bpy.props.PointerProperty(
+        type=panel.TTYDJointAttributes
+    )
+
+    bpy.types.Object.ttyd_world_animation = bpy.props.PointerProperty(
+        type=panel.TTYDEmptyAnimationProperties
+    )
+
+    bpy.types.Object.ttyd_world_light = bpy.props.PointerProperty(
+        type=panel.TTYDLightProperties
+    )
+
+    bpy.types.Object.ttyd_world_material = bpy.props.PointerProperty(
+        type=panel.TTYDEmptyMaterialProperties
+    )
+
+    bpy.types.Object.ttyd_world_texture = bpy.props.PointerProperty(
+        type=panel.TTYDEmptyTextureProperties
+    )
+
+    bpy.types.Material.meshReferences = bpy.props.PointerProperty(
+        type=panel.TTYDMaterialProperties
+    )
+    
+    bpy.types.Scene.tex_import = bpy.props.BoolProperty(
+        name="Import Textures",
+        description="Pulls 't' file from same directory to create textures for materials",
+        default=True,
+    )  # type: ignore
+
+    bpy.types.Scene.orph_mat_clear = bpy.props.BoolProperty(
+        name="Delete Materials",
+        description="Deletes existing material data in the blender file",
+        default=True,
+    )  # type: ignore
+
+    bpy.types.Scene.mat_prefix = bpy.props.StringProperty(
+        name="Only use for previewing reasons to avoid material overlap. They will break roundtrip logic if not replacing TPL.",
+        default="",
+    ) #type: ignore
+
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
-    bpy.types.Scene.coll_creation = bpy.props.BoolProperty(
-        name="Create Collections",
-        description="If enabled, will automatically organize items from single 'world_root' empty into exportable collections",
-        default=True,
-    ) # type: ignore
-    bpy.types.Scene.t_import = bpy.props.BoolProperty(
-        name="Import textures",
-        description="If enabled, will import 't' file alongside 'd' map file to create textures/materials",
-        default=True,
-    ) # type: ignore
+    
+    _registered = True
 
 def unregister():
-    bpy.utils.unregister_class(ImportBinaryFileOperator)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+    del bpy.types.Object.ttyd_world_mesh
+    del bpy.types.Object.ttyd_world_empty
+    del bpy.types.Object.ttyd_world_light
+    del bpy.types.Object.ttyd_world_material
+    del bpy.types.Scene.mat_prefix
+    del bpy.types.Scene.orph_mat_clear
+    del bpy.types.Scene.tex_import
 
-def extract_sections(file_path):
-    """
-    Reads a file and extracts content between specific start and end tags.
-    """
-    tags = [
-        ("library_images", "/library_images"),
-        ("library_effects", "/library_effects"),
-        ("library_materials", "/library_materials"),
-        ("library_geometries", "/library_geometries"),
-        ("library_animations", "/library_animations"),
-        ("library_visual_scenes", "/library_visual_scenes"),
-    ]
-    try:
-        with open(file_path, 'r') as file:
-            content = file.read()
-
-        for start_tag, end_tag in tags:
-            start_index = content.find(start_tag)
-            end_index = content.find(end_tag)
-            if start_index != -1 and end_index != -1:
-                start_index += len(start_tag)
-                extracted_string = content[start_index:end_index].strip()
-
-                # Pass extracted content to appropriate module
-                if bpy.context.scene.t_import:
-                    if start_tag == "library_images":
-                        print("images")
-                        images.process(extracted_string)
-
-                    if start_tag == "library_effects":
-                        print("effects")
-                        effects.process(extracted_string)
-                    if start_tag == "library_materials":
-                        print("materials")
-                        materials.process(extracted_string)
-                if start_tag == "library_geometries":
-                    print("geometries")
-                    geometries.process(extracted_string)
-                if start_tag == "library_animations":
-                    print("animations")
-                    animations.process(extracted_string)
-                if start_tag == "library_visual_scenes":
-                    print("scenes")
-                    scenes.process(extracted_string)
-            else:
-                print(f"Tags {start_tag} and/or {end_tag} not found.")
-    except FileNotFoundError:
-        print(f"Error: File '{file_path}' not found.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-if __name__ == "__main__":
-    register()
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)

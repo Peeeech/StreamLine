@@ -4,7 +4,6 @@ import sys
 import subprocess
 import numpy as np
 import argparse
-import tempfile
 
 # Constants for TPL file format
 TPL_MAGIC = 0x0020AF30
@@ -47,9 +46,9 @@ def read_struct(file, fmt):
 # Function to parse the TPL file header and extract texture information
 def parse_tpl_header(file):
     magic, n_images, imgtab_off = read_struct(file, ">III")
-    print(f"Magic number: {magic:08x}")
+    #print(f"Magic number: {magic:08x}")
     print(f"Number of images: {n_images:08x} ({n_images})")
-    print(f"Image table offset: {imgtab_off:08x}")
+    #print(f"Image table offset: {imgtab_off:08x}")
     
     if magic == TPL_MAGIC:
         print("TPL file format.")
@@ -67,7 +66,7 @@ def parse_image_header(file, img_offset):
     return height, width, format, data_addr, wrap_s, wrap_t, min_filter, mag_filter, lod_bias, edge_lod_enable, min_lod, max_lod
 
 # Function to get image data for all images
-def get_image_data(file, image_objects, n_images):
+def get_image_data(file, image_objects, n_images, output_path):
     for img_idx in range(n_images):
         current_image = image_objects[img_idx]
         if img_idx + 1 < n_images:
@@ -86,12 +85,15 @@ def get_image_data(file, image_objects, n_images):
 
         # Save image data as a new file
         output_filename = f"i-{img_idx + 1 }_{image_objects[img_idx]['height']}_{image_objects[img_idx]['width']}_{format_name}"
-        with open(output_filename, "wb") as raw_file:
-            #print(' '.join(f'{byte:02x}' for byte in image_data))
+        output = os.path.join(output_path, output_filename)
+        if not os.path.exists("tex"):
+            os.makedirs("tex")
+        with open(output, "wb") as raw_file:
+            #print(' '.join(f'{byte:02x}' for byte in image_data)) #raw image data log
             raw_file.write(image_data)
 
 # Main function to extract TPL to PNG
-def extract_tpl_to_png(tpl_file):
+def extract_tpl_to_png(tpl_file, output_path):
     image_objects = []  # List to store image objects
 
     try:
@@ -135,19 +137,21 @@ def extract_tpl_to_png(tpl_file):
         
             file.seek(imgtab_off + (img_idx + 1) * 8)  # 8 bytes per image entry in the table
         
-        get_image_data(file, image_objects, n_images)
+        get_image_data(file, image_objects, n_images, output_path)
         
-        subprocess.run(["python", "decode.py"])
+        #subprocess.run(["python", "decode.py"])
 
 # Script execution with argparse
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract images from a TPL file and save as PNGs.")
     parser.add_argument("tpl_file", type=str, help="The TPL file to extract images from.")
+    parser.add_argument("output_path", type=str, help="The directory to export images to.")
     args = parser.parse_args()
 
     tpl_file = args.tpl_file
+    output_path = args.output_path
     if not os.path.exists(tpl_file):
         print(f"Error: The file {tpl_file} does not exist.")
         sys.exit(1)
 
-    extract_tpl_to_png(tpl_file)
+    extract_tpl_to_png(tpl_file, output_path)

@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 from PIL import Image
+import argparse
 
 # Global list to store image data as dictionaries
 image_data_list = []
@@ -33,13 +34,10 @@ def save_as_png(image_data, out_name):
     pil_img = Image.fromarray(image_data, mode='RGBA')
     pil_img.save(out_name)
 
-def decode_and_save(image, filename, height, width):
+def decode_and_save(image, filename, height, width, output_dir):
     """
     Place common logic for saving the image as PNG.
     """
-    output_dir = "tex"
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
     output_filename = f"{os.path.basename(filename).split('_')[0]}.png"
     output_filepath = os.path.join(output_dir, output_filename)
     save_as_png(image, output_filepath)
@@ -58,7 +56,7 @@ def rgb565_to_rgba(value):
     return (R, G, B, 255)
 
 # ================================ I4 DECOMPRESSION ============================
-def decode_I4(file, height, width):
+def decode_I4(file, height, width, output_dir):
     """
     I4 => 4 bits/pixel, stored in 8×8 tiles => 32 bytes per tile.
     top nibble = first pixel, bottom nibble = second pixel
@@ -106,10 +104,10 @@ def decode_I4(file, height, width):
                     image[iy, ix] = (I, I, I, 255)
 
     # Save
-    decode_and_save(image, file.name, height, width)
+    decode_and_save(image, file.name, height, width, output_dir)
 
 # ================================ I8 DECOMPRESSION ============================
-def decode_I8(file, height, width):
+def decode_I8(file, height, width, output_dir):
     """
     I8 => 8 bits/pixel, stored in 8×4 tiles => 8*4=32 px => 32 bytes/tile
     """
@@ -147,10 +145,10 @@ def decode_I8(file, height, width):
                     # I => grayscale
                     image[iy, ix] = (val, val, val, 255)
 
-    decode_and_save(image, file.name, height, width)
+    decode_and_save(image, file.name, height, width, output_dir)
 
 # ================================ IA4 DECOMPRESSION ===========================
-def decode_IA4(file, height, width):
+def decode_IA4(file, height, width, output_dir):
     """
     Decode IA4 data stored in 8×4 tiles (typical GC/Wii layout).
     Each tile is 8 pixels wide, 4 pixels tall => 32 pixels => 32 bytes.
@@ -215,10 +213,10 @@ def decode_IA4(file, height, width):
 
                     image[iy, ix] = (I, I, I, A)
 
-    decode_and_save(image, file.name, height, width)
+    decode_and_save(image, file.name, height, width, output_dir)
 
 # ================================ IA8 DECOMPRESSION ===========================
-def decode_IA8(file, height, width):
+def decode_IA8(file, height, width, output_dir):
     raw_data = file.read()
 
     tile_w = 4
@@ -258,10 +256,10 @@ def decode_IA8(file, height, width):
                     I = val & 0xFF
                     image[iy, ix] = (I, I, I, A)
 
-    decode_and_save(image, file.name, height, width)
+    decode_and_save(image, file.name, height, width, output_dir)
 
 # ================================ RGB565 DECOMPRESSION ========================
-def decode_RGB565(file, height, width):
+def decode_RGB565(file, height, width, output_dir):
     """
     RGB565 in 4×4 tiles => each tile = 16 pixels × 2 bytes = 32 bytes.
     Bits:
@@ -321,10 +319,10 @@ def decode_RGB565(file, height, width):
                     image[iy, ix] = (R, G, B, 255)
 
     # Save result
-    decode_and_save(image, file.name, height, width)
+    decode_and_save(image, file.name, height, width, output_dir)
 
 # ================================ RGB5A3 DECOMPRESSION ========================
-def decode_RGB5A3(file, height, width):
+def decode_RGB5A3(file, height, width, output_dir):
     """
     RGB5A3 in 4×4 tiles => each tile = 16 pixels × 2 bytes = 32 bytes.
     If top bit == 0 => ARGB4444:
@@ -398,10 +396,10 @@ def decode_RGB5A3(file, height, width):
 
                     image[iy, ix] = (R, G, B, A)
 
-    decode_and_save(image, file.name, height, width)
+    decode_and_save(image, file.name, height, width, output_dir)
 
 # ================================ RGBA32 DECOMPRESSION ========================
-def decode_RGBA32(file, height, width):
+def decode_RGBA32(file, height, width, output_dir):
     """
     RGBA32 => 4 bytes per pixel, stored in 4×4 tiles => 16 pixels => 64 bytes.
     We'll assume the layout is [R][G][B][A] in big-endian for each pixel.
@@ -449,7 +447,7 @@ def decode_RGBA32(file, height, width):
 
                     image[iy, ix] = (R, G, B, A)
 
-    decode_and_save(image, file.name, height, width)
+    decode_and_save(image, file.name, height, width, output_dir)
 
 # ================================ C4 DECOMPRESSION ============================
 def decode_C4(file):
@@ -534,7 +532,7 @@ def decompress_cmpr_block(block):
 
     return texels_4x4
 
-def decode_CMPR(file, height, width):
+def decode_CMPR(file, height, width, output_dir):
     """
     Decode the Nintendo-style CMPR (similar to DXT1) in '8x8 macro-blocks'.
     Each 8x8 is stored as four sub-blocks of 4x4, each 8 bytes.
@@ -576,7 +574,7 @@ def decode_CMPR(file, height, width):
                         if iy < height and ix < width:
                             image[iy, ix] = block_4x4[row][col]
 
-    decode_and_save(image, file.name, height, width)
+    decode_and_save(image, file.name, height, width, output_dir)
 
 # ================================ ================= ==============================
 # ================================ DECOMPRESSION END ==============================
@@ -600,9 +598,8 @@ def get_format_function(format_str):
 
     return format_function_map.get(format_str)
 
-# Main script
-if __name__ == "__main__":
-    directory = os.path.dirname(os.path.realpath(__file__))
+def decode(directory):
+
     files = os.listdir(directory)
 
     for filename in files:
@@ -621,7 +618,7 @@ if __name__ == "__main__":
                         file_path = os.path.join(directory, filename)
                         filesToDelete.append(file_path)
                         with open(file_path, "rb") as file:
-                            decode_func(file, height, width)
+                            decode_func(file, height, width, directory)
                     else:
                         print(f"No decoder function available for format {format_str}.")
                 else:
@@ -631,3 +628,12 @@ if __name__ == "__main__":
             os.remove(f)
         except OSError as e:
             print(f"Warning: Could not delete {f}: {e}")
+
+# Main script
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Extract images from a TPL file and save as PNGs.")
+    parser.add_argument("directory", type=str, help="The folder to import images from.")
+    args = parser.parse_args()
+
+    directory = args.directory
+    decode(directory)
