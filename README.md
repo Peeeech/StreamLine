@@ -1,100 +1,144 @@
-# PLEASE READ INSTRUCTIONS BELOW:
-To export this with PistonMiner's exporter, you will need to change one of the scripts within it. You will have to open 'dmd.py' which is right inside the io_scene_ttyd folder in your addons folder.
-You need to replace lines 750-751, which are:
+# QUICK OVERVIEW:
+This blender addon works as an almost-lossless I/O for TTYD/SPM DMD, TPL, and Cam_Road files (`d`, `t`, and `c` respectively)
 
-initially:
-                            tc_layer_name = blender_uv_layers[tc_index]
-							tc_layer = blender_mesh.uv_layers[tc_layer_name]
-replace it with:
-                            tc_layer = blender_mesh.uv_layers.active
-
-You should be able to just use CTRL+F to search "tc_layer_name" without quotations to find the first of the two lines that need replaced, as it's the only occurrence of it in the script. 
-
-After replacing the lines, the entire 'if' statement should read as follows (starting on line 749, finishing on line 756):
-                            if tc_index < len(blender_uv_layers):
-								tc_layer = blender_mesh.uv_layers.active
-								tc_data = tuple(tc_layer.data[loop_index].uv)
-							else:
-								# todo-blender_io_ttyd: Figure out if this is a
-								# fatal error; probably should be.
-								assert(False)
-								tc_data = (0.0, 0.0)
+First of all: Huge credit to PistonMiner for the original version of his `io_scene_ttyd` addon from ttyd_tools, which my fork here is derived from
 
 # StreamLine
-Second iteration of streamLine project, complete overhaul of previous method
+Third iteration of streamLine project, once again a complete overhaul of previous method
 
-# Once again, This entire process has only been made possible thanks to the efforts of:
+## Once again, This entire process has only been made possible thanks to the efforts of:
 PistonMiner, Jasper (noclip), Jemaroo, Jdaster64, NWPlayer, Rain, Peardian, and many others in the Petalburg (https://discord.gg/kGzG2BtsBX), Noclip (https://discord.gg/zGFeKVRv5v), and other discord servers
 
-With help from Peardian's code, who uploaded the models to the ModelsResource using an exporter made from some of noclip's source code, I was able to get their modified code running in Node to get rid of any html code used. This version of streamLine now lets you import a 'd' map file straight into blender, and it will parse the data to create the map. It's far from perfect, still not having any animation data, but it handles geometry, vertex colors, UV maps, as well as importing the 't' file (assuming it's in the same folder that 'd' was) and will produce the images and materials necessary for the scene. It also has operator presets to disable importing or altering textures/materials at all, as well as disabling the final step of reorganizing into collections/applying transformations to the geometry. I plan on trying to update it to where Node isn't necessary, but this may lead to requiring some other python libraries.
-
 # NOTE:
-Using this tool requires having Node installed and linked to your path variable (my version is v20.11.0 if you ever run into errors with a different version)
-https://nodejs.org/en/download
-
-# NOTE 2:
-Using the images section of this tool will also try to install PIL if you do not have it installed, which considering blender's native python API doesn't, you probably won't. I set up the installation subprocess a long time ago and haven't tested it much, so please let me know if it doesn't work and I will try to fix it. If you would not like to use PIL, you would have to uncheck the 'Import Textures' checkbox, as it's vital for checking for transparency when creating the materials.
-
-Finally, if you run into any problems, or if you get a console message in blender that says to contact me, it's due to UVColors not being implemented, as none of the maps I tested had them, and I haven't been able to work on them because of it.
+The iteration of this tool no longer requires a Node.js install as it's all Python-based, but it does rely on PIL and NumPy libs. PIL and Numpy will automatically attempt to be installed into the blender-embedded python environment upon map-import.
 
 SET-UP
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-1. Install Node (https://nodejs.org/en/download) and ensure it's linked to your path variable
-2. Put the io_scene_pmmap folder into your blender's addons folder
-3. Open blender and click 'Edit' -> 'Preferences' -> 'Add-ons' -> Find and endable "Import-Export: PMMap Parser"
-4. When you click 'File' -> 'Import' a new option will be present, with this, import a 'd' file from a dumped ISO of Paper Mario TTYD
-    (Note: the 'Import Textures' functions will only work properly if the 't' file is in the same directory as the selected 'd' file)
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-TO EXPORT
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Using PistonMiner's IO_Scene_TTYD: (https://github.com/PistonMiner/ttyd-tools/)
-These only apply if using custom models/materials/animations
-1. Ensure all materials follow the format present in either node example
-2. Ensure all objects have a UV Map named 'UVMap' and a Vertex group named 'Col'
-3. Ensure all animation tracks have been pushed down into NLA strips
-4. Select each collection respectively with the operator presets and click export
-
-If exporting a map directly after importing, just go ahead and select the collections and you'll be set!
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+1. Put both the `io_scene_pmmap` and `io_scene_ttyd` folders into your blender's addons folder
+2. Open blender and click 'Edit' -> 'Preferences' -> 'Add-ons' -> Find and enable `PMMap Importer` and `Paper Mario DMD Map Exporter`
+3. When you click 'File' -> 'Import' a new option will be present, with this, import a 'd' file from a dumped ISO of Paper Mario TTYD
+    (Note: the 'Import Textures' functions will only work properly if the 't' file is in the same directory as the selected 'd' file, same as the Camera_Road only importing if the 'c' file is in the same dir)
+4. When you click 'File' -> 'Export' a new option will be present, with this, collections will automatically be set up upon map import to allow you to choose export directory (note the filename doesn't affect the output)
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Extras from my deprecated repo:
 
 SOME TERMS
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Blender terms (in relation to this, any knowledge on blender as a program will have to be either asked directly or learned on your own time),
- - The `MAP` collection is all of the `VISIBLE` data that you see while playing the game. Inherently, Mario won't collide with anything in this collection, as like stated, it is ONLY the VISUAL data
+ - The `MAP` collection is all of the `VISIBLE` data that you see while playing the game. Inherently, Mario won't collide with anything in this collection, as it is ONLY the VISUAL data
  - The `HIT` collection is all of the `COLLISION` data that Mario interacts with. This can exist where there is no object in the Map collection to make invisible walls, or can be omitted to make objects not be collided with
-     When adding a new object, moving it, or deleting it in the Map collection, ensure that you alter the Hit collection so that Mario reacts to it as intended, whether it be hitting it or not
- - The `CAM` (or whatever you name it) collection is the `CAMERA` road data, that controls how the camera moves based on where you are in the room at any given point.
+     - When adding a new object, moving it, or deleting it in the Map collection, ensure that you alter the Hit collection so that Mario reacts to it as intended, whether it be colliding or rendering
+ - The `CAM` collection is the `CAMERA ROAD` data, that controls how the camera moves based on where you are in the room at any given point. It uses curves as 'rails' that the camera slides on, with activation planes that determine regions that activate the rail they're parented to
 
 File terms (when exporting 3 files are created, which share names with 3 of the files in a map folder)
  - The `d` file contains `map data`, including the Map and Hit collections' data, and animation data (in the original files, and when it's properly processed by this)
  - The `t` file contains `texture data`, including all textures used across the entire map
  - The `c` file contains `camera data`, including the paths the camera follows and the zones where it's active
-Also, in any maps with NPC's there's an `s` file, which contains `sprite data` for each location. At the moment this isn't integrated into this program in any way. Though it may be far in the future, I wouldn't expect it any time soon
 
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+(With SPM the equivalent of these are `map.dat`, `[map_id].tpl`, and `camera_road.bin` respectively. once renamed and replaced in the file bins, these will work directly)
 
-CAMERA ROAD
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Also, in any maps with NPC's there's an `s` file, which contains `sprite data` (NPC layouts) for each location. At the moment this isn't integrated into this program in any way. Though it may be far in the future, I wouldn't expect it any time soon
 
-To effectively make a custom camera path you're going to need (at least) 2 things
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+CUSTOM PANEL
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Most things will be accessible by clicking on the type of object you want to edit, going to the `Object (Object Properties)` subsection of the `Properties` tab (The Object tab is the orange square with an outline around the corners), and then expanding the `TTYD World Properties` panel.
 
-A Nurbs Path which is the actual path the camera follows
-A Plane mesh which dictates the area you're in to make the camera follow said path
+The panel itself has a few different setups depending on the kind of object, so we'll go through each.
 
-To set up the camera path;
+## Attributes (Universal between Empties and Meshes)
+Notably some of these are only applied to meshes, but the attributes block is present on every joint in DMD, and certain multi-mesh objects (see `dmdObject`s in Empty-Specifics) need the flags to exist on empties so they are appended to each fragment-mesh
 
-1. Create the Plane mesh and scale it to where you want the camera to follow the path (the size of the Nurbs Path follows in relation to the size of the Plane, so the easiest method would probably be to have the Path go from one end of the plane to another)
-2. Create the Nurbs Path and edit vertices of it (subdividing it if you want to make it go in different directions without making a second set)
-3. Once both objects are in the desired locations click on the Path object and in the `Context` menu underneath the Scene Collection (Context is the orange square with 4 extruded corners around it) and expand `Custom Properties`
-4. Add a new custom property named `clamp_distance_left` and set the `Property Value` to how far left of Mario you want the camera to reside
-5. Add a new custom property named `clamp_distance_right` and set the `Property Value` to how far right of Mario you want the camera to reside
-     (Setting these numbers to the same value will center the camera on him)
-6. Add one last custom property named `marker0` and set the Property Value to the same name as the Plane Mesh you created earlier
+- origin_offset: used as a pivot marker to mimic offsets used by the original exporter, as Maya had extraneous animation-pivots beyond blender's single-origin
+- light_mask: a bitmask to define which of the lights in the scene will be rendered on the object (
+- draw_mode: uint32 flag to determine how meshes are rendered
+- cull_mode: uint32 flag to determine culling mode (simplified to an Enum in renderer)
+	- Note: cull_mode: 'BACK' means the back is getting culled, and only the front is visible
+ - wFlags: used for visual scene setup
+	- Only use-case known is wFlags: (18) on a parent sorts it's children by render-order in-game. this is how multiple decals are layered over each-other without Z-fighting
+ - hit_type: used for collision flags
+	- simplified to an enum for things like Boat_Panels, Plane_Panels, etc.; hit_val is used as a backup to preserve non-mapped vals, and can be set manually with the enum = 'NONE' to export with
 
-This process can be repeated, adding a new set of objects to create multiple "zones" where the camera follows differing paths, just ensure you update the `marker0` property to reflect the correct name of the mesh you want that line to adhere to if you duplicate the first set of camera objects
+## Empty-Specifics
+BOOLS: (dmdObject, isLight, isMaterial, isTexture, isAnimation)
+These booleans are used to set up custom panel-drawing to avoid having to set up multiple panels, and have all of the embedded metadata accessible for each object without the flag-setters having to special case metadata accessors
 
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+### dmdObject:
+- Mesh Members: used to represent multi-mesh objects in a way that they can be recreated on export, as blender doesn't natively support single objects with multiple, distinguishable meshes like DMD does. Not currently creatable manually, only used as a visualizer / lossless preservation
+
+### isLight:
+Light Data
+- base_color: RGBA color (0-255) of the source GX light
+- multiplier: used separate from base_color for animation driving to avoid messing up the static light objects
+- spotAngle:
+- distanceAttenuationType:
+- wFlags: unk
+- enableFlags: unk
+
+### isMaterial:
+Material Data
+- Blender Users: list of meshes using the material, automatically appended from drawMode material variant creation. not manually editable, will eventually be auto-updated by a material-rebuild function
+- color: baked RGBA value
+- matSrc: boolean flag to either render with baked color / vertex colors in geometry
+- unk_009: unk
+- blendMode: Used to define whether an object is opaque ('OPAQUE'), translucent ('FULL' [fully blended]), or clipped ('CLIP')
+- numTextures: visual repr for how many textures embedded, very unlikely to not ever match sampler count
+- blendAlphaModulation: likely the driven value for materialBlendAlpha animations; unk for sure
+- textureSamplers: list of sampler objects to register textures in the GX material space. See 'Sampler' in dedicated `Materials` section
+- TEV Config: full struct unk, currently only exposes single TEV Mode value, which uses pre-defined render modes in the game to adjust how materials are rendered. Only a select few are currently implemented.
+
+### isTexture:
+Texture Data (Simple container to preserve image index / metadata)
+- index: used to organize images during serialization, required to preserve round-tripping since the original serializer didn't use any 'obvious' ordering
+- texture name: string that needs to match an `Image` datablock in blender 1:1
+
+### isAnimation:
+Animation Bundle Data (contains tables for multiple animation types. will be expanded on more in dedicated `Animations` section
+BOOLS: 'joint', 'uv', 'alpha', 'lightT', 'lightP'
+Universal - track count: essentially the number of independent animations driven by the table
+one anim bundle can have anywhere from 0-5 of the bools active, each bool defines an animation table's presence in the bundle.
+
+Joint (Or Light Transform) Table:
+Used for mesh animations
+- joint (or light): the object being targeted
+- keyframeCount: the amount of different positions the animation has
+- action: reference to the NLA action that holds keyframe/transformation data
+
+  
+UV Table:
+Used for texture-transform animations
+- name: name of the material being targeted (will attempt to find `name`, `name_v`, and `name_v_x`. this is the exact switch logic the original game used)
+- skew: offset for the image pre-animation
+- samplerIndex: used to decide which sampler an animation is for; only ever non-zero on multi-sampler materials
+- `[mat], [mat_v], [mat_v_x]`: ref to the actual material(s) that the animation affects
+- action: reference to the NLA action that holds keyframe/transformation data
+
+Alpha Table: 
+unk yet; presumably a way to cleanly animate an entire object's visible alpha for fade-like effects?
+
+Light Transform Table:
+See Joint Table; identical except set up for Light objects.
+(notably, on export, light transforms are *also* serialized as joint transforms)
+
+Light Param Table:
+Used to change things like light color, angle, strength, etc.
+(all driven parameters are found in the `Object` panel for the light)
+- name: name of light targeted
+- action: reference to the NLA action that holds keyframe/transformation data
+  
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ANIMATIONS
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+To create custom animation tracks, I would highly recommend first finding a map with the custom animation type you want to see how the layouts are set up and to have a reference guide
+- Note that no maps in TTYD use the `matAlphaBlend` animation table with any meaningful data. (one case exists, but the values are zeroed out and presumably not called in the map's REL)
+
+- Also note that animation tracks added to a map will have to be called with a REL patch, unless the map already calls the AnimBundle(DMDAnimation container name). Removing animation data or objects / materials that source maps rely on will lead to crashes when the game tries to load them, so removing existing animations isn't currently a trivial task.
+
+Within the `Animations` collection, each empty inside acts as a DMD-Animation-Bundle object, for the exporter to serialize at the top-level. Animation drivers from the REL are inherently activated by calling the name of the bundle (the name is stored within the `isAnimation` section of the empty container)
+
+TODO: Finish dedicated sections
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
