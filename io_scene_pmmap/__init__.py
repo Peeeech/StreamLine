@@ -27,7 +27,7 @@ geomDebug = True
 addon_dir = os.path.dirname(__file__)
 
 bl_info = {
-    "name": "TTYD Blender",
+    "name": "PMMap Importer",
     "author": "Peeeech",
     "version": (1, 0),
     "blender": (4, 0, 0),
@@ -106,6 +106,18 @@ class ImportBinaryFileOperator(bpy.types.Operator):
                     print("PIL (Pillow) has been successfully installed.")
                 except Exception as e:
                     print(f"Error installing PIL (Pillow): {e}") 
+
+            try:
+                import numpy
+            except ImportError:
+                print("NumPy is not installed. Attempting to install...")
+                try:
+                    subprocess.Popen([sys.executable, "-m", "ensurepip"]).communicate()
+                    subprocess.Popen([sys.executable, "-m", "pip", "install", "numpy"]).communicate()
+                    import numpy # type: ignore
+                    print("NumPy has been successfully installed.")
+                except Exception as e:
+                    print(f"Error installing NumPy: {e}") 
 
             #Path helpers for texture/cam_road file
             t_file = os.path.join(os.path.dirname(binary_file), "t")
