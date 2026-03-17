@@ -1,0 +1,17 @@
+import subprocess
+import sys
+import ensurepip
+
+python = sys.executable
+
+# make sure pip exists in Blender's python
+ensurepip.bootstrap()
+
+# upgrade pip (optional but recommended)
+subprocess.check_call([python, "-m", "pip", "install", "--upgrade", "pip", "--no-warn-script-location"])
+
+# install required packages
+subprocess.check_call([python, "-m", "pip", "install", "Pillow"])
+subprocess.check_call([python, "-m", "pip", "install", "numpy"])
+
+print("Pillow and NumPy installed successfully.")
