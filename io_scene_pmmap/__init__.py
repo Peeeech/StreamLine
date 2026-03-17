@@ -30,7 +30,7 @@ bl_info = {
     "name": "PMMap Importer",
     "author": "Peeeech",
     "version": (1, 0),
-    "blender": (4, 0, 0),
+    "blender": (5, 0, 0),
     "location": "File > Import",
     "description": "Imports Paper Mario Maps using a Python buffer parser",
     "warning": "This is an early alpha version. Expect bugs and missing features. Please report any issues on the GitHub page. It also has a requirement for Pillow to import textures, which is attempted to be automatically installed if not found, but may require manual installation in some cases.",

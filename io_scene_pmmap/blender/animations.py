@@ -196,6 +196,20 @@ LOC = 1
 ROT = 2
 SCL = 3
 
+def ensure_fcurve(action, datablock, data_path, index):
+    """
+    Blender 4.x → action.fcurves.new
+    Blender 5.x → action.fcurve_ensure_for_datablock
+    """
+    if hasattr(action, "fcurve_ensure_for_datablock"):
+        return action.fcurve_ensure_for_datablock(
+            datablock=datablock,
+            data_path=data_path,
+            index=index
+        )
+    else:
+        return action.fcurves.new(data_path=data_path, index=index)
+
 def insert_hermite_key(fcu, is_step, time, value, tan_in, tan_out, prev_time=None, next_time=None):
     kp = fcu.keyframe_points.insert(time, value, options={'FAST'})
 
@@ -227,13 +241,14 @@ def insert_hermite_key(fcu, is_step, time, value, tan_in, tan_out, prev_time=Non
 
     return kp
 
-def build_transform_action_from_dmd(track, obj_origin, anim_origin, anim_scale, anim_delta, action_name):
+def build_transform_action_from_dmd(track, obj, obj_origin, anim_origin, anim_scale, anim_delta, action_name):
     action = bpy.data.actions.new(action_name)
-
+    ad = obj.animation_data_create()
+    ad.action = action
     # --- Translation ---
 
     for idx in range(3):
-        fcu = action.fcurves.new("location", index=idx)
+        fcu = ensure_fcurve(action, obj, "location", index=idx)
         keys = track.keyframes
 
         for i, kf in enumerate(keys):
@@ -255,7 +270,7 @@ def build_transform_action_from_dmd(track, obj_origin, anim_origin, anim_scale, 
 
     # --- Rotation ---
     for idx in range(3):
-        fcu = action.fcurves.new("rotation_euler", index=idx)
+        fcu = ensure_fcurve(action, obj, "rotation_euler", index=idx)
         keys = track.keyframes
 
         for i, kf in enumerate(keys):
@@ -281,7 +296,7 @@ def build_transform_action_from_dmd(track, obj_origin, anim_origin, anim_scale, 
 
     # --- Scale ---
     for idx in range(3):
-        fcu = action.fcurves.new("scale", index=idx)
+        fcu = ensure_fcurve(action, obj, "scale", index=idx)
         keys = track.keyframes
 
         for i, kf in enumerate(keys):
@@ -309,6 +324,8 @@ def make_transform_action(traType, track_idx, target, obj_origin, anim_origin, a
 
     action = build_transform_action_from_dmd(
         track=dmd_track,
+        obj=target,
+
         obj_origin=obj_origin,
         anim_origin=anim_origin,
         anim_scale=anim_scale,
@@ -365,7 +382,7 @@ def build_matuv_action_from_dmd(trackName, track, mat: bpy.types.Material, sampl
 
     def fcurve(socket_index: int, component_index: int):
         path = f'nodes["{node_name}"].inputs[{socket_index}].default_value'
-        return action.fcurves.new(data_path=path, index=component_index)
+        return ensure_fcurve(action, nt, path, component_index)
 
     f_loc_x = fcurve(LOC, 0)
     f_loc_y = fcurve(LOC, 1)
@@ -448,10 +465,6 @@ def build_matuv_action_from_dmd(trackName, track, mat: bpy.types.Material, sampl
             next_time=next_t,
         )
 
-    # Optional: force update
-    for fcu in action.fcurves:
-        fcu.update()
-
     return action
 
 def make_matuv_action(track_idx, mat: bpy.types.Material, samplerIndex, trackName, dmd_track):
@@ -494,7 +507,7 @@ def build_matalpha_action_from_dmd(track, emptyMat, blend, action_name: str):
     ad.action = action
 
     for idx in range(4):
-        fcu = action.fcurves.new("ttyd_world_material.blendAlphaModulationR", index=idx)
+        fcu = ensure_fcurve(action, emptyMat, "ttyd_world_material.blendAlphaModulationR", index=idx)
         keys = track.keyframes
 
         for i, kf in enumerate(keys):
@@ -577,7 +590,7 @@ def build_lightparam_action_from_dmd(track, light, action_name):
     keys = track.keyframes
 
     for idx in range(3):
-        fcu = action.fcurves.new("ttyd_world_light.multiplier", index=idx)
+        fcu = ensure_fcurve(action, light, "ttyd_world_light.multiplier", index=idx)
 
         for i, kf in enumerate(keys):
             prev_t = keys[i-1].time if i > 0 else None
@@ -597,10 +610,7 @@ def build_lightparam_action_from_dmd(track, light, action_name):
             )
 
      # --- Spot angle (scalar) ---
-    fcu_spot = action.fcurves.new(
-        "ttyd_world_light.spotAngle",
-        index=0
-    )
+    fcu_spot = ensure_fcurve(action, light, "ttyd_world_light.spotAngle", index=0)
 
     for i, kf in enumerate(keys):
         prev_t = keys[i-1].time if i > 0 else None
@@ -620,10 +630,7 @@ def build_lightparam_action_from_dmd(track, light, action_name):
         )
 
     # --- Angular attenuation ---
-    fcu_ang = action.fcurves.new(
-        "ttyd_world_light.angularAttenuation",
-        index=0
-    )
+    fcu_ang = ensure_fcurve(action, light, "ttyd_world_light.angularAttenuation", index=0)
 
     for i, kf in enumerate(keys):
         prev_t = keys[i-1].time if i > 0 else None

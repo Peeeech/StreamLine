@@ -217,7 +217,10 @@ def _create_mesh_object(name: str, geom: Any, mesh_entry: Any, debug: bool, pref
             _vec3_to_tuple(normals[loop.vertex_index])
             for loop in me.loops
         ]
-        me.use_auto_smooth = True
+        if hasattr(me, "use_auto_smooth"):
+            me.use_auto_smooth = True
+        else:
+            me.shade_smooth()
         me.normals_split_custom_set(loop_normals)
 
     obj = bpy.data.objects.new(f"{matprefix}{name}", me)

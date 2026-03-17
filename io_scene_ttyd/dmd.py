@@ -1253,6 +1253,28 @@ def value_keyframe_convert_scalar_to_degrees(value_keyframe):
 class ExportError(RuntimeError):
     pass
 
+def get_action_fcurves(source_object, action):
+    # Blender < 5.0
+    if hasattr(action, "fcurves"):
+        return action.fcurves
+
+    ad = getattr(source_object, "animation_data", None)
+    if ad is None:
+        return ()
+
+    slot = getattr(ad, "action_slot", None)
+    if slot is None:
+        return ()
+
+    for layer in action.layers:
+        for strip in layer.strips:
+            if hasattr(strip, "channelbag"):
+                cb = strip.channelbag(slot, ensure=False)
+                if cb is not None:
+                    return cb.fcurves
+
+    return ()
+
 class DmdAnimation:
 	def __init__(self):
 		self.name = ""
@@ -1487,8 +1509,9 @@ class DmdAnimation:
 	@staticmethod
 	def _make_keyframes(source_object, action, keyframe_layout, blender_fcurve_mapping, required_times=None):
 		keyframe_times = set()
+		fcurves = get_action_fcurves(source_object, action)
 
-		for fcurve in action.fcurves:
+		for fcurve in fcurves:
 			src = (fcurve.data_path, fcurve.array_index)
 			if src not in blender_fcurve_mapping:
 				continue
@@ -1519,7 +1542,7 @@ class DmdAnimation:
 			for name, count in keyframe_layout.items():
 				kf[name] = None if count == 1 else [None] * count
 
-			for fcurve in action.fcurves:
+			for fcurve in fcurves:
 				src = (fcurve.data_path, fcurve.array_index)
 				if src not in blender_fcurve_mapping:
 					continue
@@ -1673,8 +1696,8 @@ class DmdAnimation:
 		return anim
 	
 	@staticmethod
-	def _any_keyframes_exist(action, blender_fcurve_mapping):
-		for fcurve in action.fcurves:
+	def _any_keyframes_exist(source_object, action, blender_fcurve_mapping):
+		for fcurve in get_action_fcurves(source_object, action):
 			src = (fcurve.data_path, fcurve.array_index)
 			if src in blender_fcurve_mapping:
 				return True

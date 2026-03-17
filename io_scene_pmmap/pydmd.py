@@ -1,4 +1,3 @@
-
 """ 
     ========================================================================
     Parsing script to parse data from Paper Mario: TTYD/SPM's DMD Map files
