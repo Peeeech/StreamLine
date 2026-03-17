@@ -1,3 +1,6 @@
+# STARTUP:
+You will need to run the contents of the `blenderprep` text file within blender's `Scripting` workspace. You can copy and paste the contents directly; it will stop responding for a bit as it collects the packages, but with this method no Python installation is necessary except for what is bundled with Blender inherently. 
+
 # QUICK OVERVIEW:
 This blender addon works as an almost-lossless I/O for TTYD/SPM DMD, TPL, and Cam_Road files (`d`, `t`, and `c` respectively)
 
