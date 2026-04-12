@@ -323,6 +323,9 @@ class TTYD_OT_select_object(bpy.types.Operator):
 
         return {'FINISHED'}
 
+def quantize(v, precision=5):
+    return tuple(round(x, precision) for x in v)
+
 class TTYD_OT_rebuild_local_ir(bpy.types.Operator):
     bl_idname = "ttyd.rebuild_local_ir"
     bl_label = "Rebuild Local IR"
@@ -347,7 +350,6 @@ class TTYD_OT_rebuild_local_ir(bpy.types.Operator):
 
         try:
             # Ensure triangulation view without destroying CORNER layers
-            eval_mesh.calc_normals_split()
             eval_mesh.calc_loop_triangles()
 
             # ---- detect available attributes ----
@@ -367,7 +369,7 @@ class TTYD_OT_rebuild_local_ir(bpy.types.Operator):
                     ca = eval_mesh.color_attributes.active or eval_mesh.color_attributes[0]
 
             col_layer = None
-            if ca and ca.data_type in {'BYTE_COLOR', 'FLOAT_COLOR'} and ca.domain in {'CORNER', 'POINT'}:
+            if ca and ca.data_type == 'BYTE_COLOR' and ca.domain == 'CORNER':
                 expected = len(eval_mesh.loops) if ca.domain == 'CORNER' else len(eval_mesh.vertices)
                 if expected > 0 and len(ca.data) == expected:
                     col_layer = ca.data
@@ -383,51 +385,80 @@ class TTYD_OT_rebuild_local_ir(bpy.types.Operator):
             _clear_collection(props.local_vertices)
             _clear_collection(props.local_primitives)
 
+            vertex_map = {}
+            tri_indices = []
+
             # Build expanded vertex stream using loop triangles (guaranteed tris)
             for tri in eval_mesh.loop_triangles:
                 loops = tri.loops
-                loops = (loops[0], loops[2], loops[1]) #GX triangle winding is flipped from Blender
+                loops = (loops[0], loops[2], loops[1])
 
                 for li in loops:
                     loop = eval_mesh.loops[li]
                     v = eval_mesh.vertices[loop.vertex_index]
 
-                    lv = props.local_vertices.add()
+                    # Build a unique key per vertex
+                    
+                    pos = tuple(v.co)
+                    nrm = (loop.normal.x, loop.normal.y, loop.normal.z)
+                    uv0_val = tuple(uv0[li].uv) if uv0 else None
+                    uv1_val = tuple(uv1[li].uv) if uv1 else None
+                    col_val = tuple(_read_color_value(col_layer[li])) if col_layer and ca.domain == 'CORNER' else tuple(_read_color_value(col_layer[loop.vertex_index])) if col_layer else None
+                    
+                    key = (
+                        quantize(pos),
+                        quantize(nrm) if has_nrm else None,
+                        quantize(uv0_val) if has_uv0 else None,
+                        quantize(uv1_val) if has_uv1 else None,
+                        col_val if has_col else None
+                    )
 
-                    # Position
-                    lv.pos = v.co[:]
-
-                    # Normal (loop normal)
-                    n = loop.normal
-                    lv.nrm = (n.x, n.y, n.z)
-
-                    # UV0/UV1 (per loop)
-                    if uv0:
-                        u = uv0[li].uv
-                        lv.uv0 = (u.x, 1.0 - u.y)
+                    if key in vertex_map:
+                        idx = vertex_map[key]
                     else:
-                        lv.uv0 = (0.0, 0.0)
+                        lv = props.local_vertices.add()
+                        idx = len(props.local_vertices) - 1
 
-                    if uv1:
-                        u = uv1[li].uv
-                        lv.uv1 = (u.x, 1.0 - u.y)
-                    else:
-                        lv.uv1 = (0.0, 0.0)
+                        lv.pos = v.co[:]
 
-                    # Color (domain-correct indexing)
-                    if col_layer:
-                        if ca.domain == 'CORNER':
-                            lv.col = _read_color_value(col_layer[li])
-                        else:  # POINT
-                            lv.col = _read_color_value(col_layer[loop.vertex_index])
-                    else:
-                        lv.col = (0.0, 0.0, 0.0, 0.0)
+                        n = loop.normal
+                        lv.nrm = (n.x, n.y, n.z)
+
+                        if uv0:
+                            u = uv0[li].uv
+                            lv.uv0 = (u.x, 1.0 - u.y)
+                        else:
+                            lv.uv0 = (0.0, 0.0)
+
+                        if uv1:
+                            u = uv1[li].uv
+                            lv.uv1 = (u.x, 1.0 - u.y)
+                        else:
+                            lv.uv1 = (0.0, 0.0)
+
+                        if col_layer:
+                            if ca.domain == 'CORNER':
+                                lv.col = _read_color_value(col_layer[li])
+                            else:
+                                lv.col = _read_color_value(col_layer[loop.vertex_index])
+                        else:
+                            lv.col = (0.0, 0.0, 0.0, 0.0)
+
+                        vertex_map[key] = idx
+
+                    tri_indices.append(idx)
 
             # One primitive packet: triangles over the entire expanded vertex list
-            for i in range(0, len(props.local_vertices), 3):
+            # ---- build triangle index buffer ----
+
+            props.local_tri_indices = ",".join(map(str, tri_indices))
+
+
+            # ---- build triangle primitives (unchanged behavior) ----
+            for i in range(0, len(tri_indices), 3):
                 prim = props.local_primitives.add()
                 prim.opcode = GX_TRIANGLES
-                prim.indices = f"{i},{i+1},{i+2}"
+                prim.indices = f"{tri_indices[i]},{tri_indices[i+1]},{tri_indices[i+2]}"
 
             props.ir_dirty = False
             self.report({'INFO'}, f"Built Local IR: {len(props.local_vertices)} verts, 1 prim stream")
@@ -436,7 +467,7 @@ class TTYD_OT_rebuild_local_ir(bpy.types.Operator):
         finally:
             # Important: free evaluated mesh
             eval_obj.to_mesh_clear()
-    
+   
 class TTYD_OT_rebuild_camroad_ir(bpy.types.Operator):
     bl_idname = "ttyd.rebuild_camroad_ir"
     bl_label = "Rebuild CamRoad IR"
