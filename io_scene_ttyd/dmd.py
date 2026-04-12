@@ -879,13 +879,20 @@ class DmdModel:
 		materialEmpty = props.emptyMaterial
 		dmd_material = None
 
+		matNames = []
+
 		for m in materials:
 			if m.name == materialEmpty.name:
 				dmd_material = m
+				print(m.name)
 				break
+				
+			matNames.append(m.name)
 
 		if dmd_material is None:
 			print(f"[WARNING] Material missing for '{blender_object.name}', creating fallback")
+			
+			print(f"    Expected material from materials: {matNames}\n    Had {materialEmpty.name}")
 			dmd_material = DmdMaterial.from_blender_material(materialEmpty)
 			materials.append(dmd_material)
 
@@ -2067,8 +2074,14 @@ class DmdFile:
 			dmd_material = DmdMaterial.from_blender_material(emptyMat)
 			file.materials.append(dmd_material)
 
-		hit_root = settings["hit_root"].objects.get("A")
-		map_root = settings["map_root"].objects.get("S")
+		hit_root = settings["hit_root"].objects[0]
+		map_root = settings["map_root"].objects[0]
+
+		if len(hit_root.children) > 1:
+			print("hit_root has more than one secondary root. This should probably be a failstate.")
+
+		if len(map_root.children) > 1:
+			print("map_root has more than one secondary root. This should probably be a failstate.")
 
 		file.map_joint = DmdJoint.from_blender_object(
 			map_root,

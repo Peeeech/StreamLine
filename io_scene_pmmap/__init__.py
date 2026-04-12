@@ -87,6 +87,9 @@ class ImportBinaryFileOperator(bpy.types.Operator):
         # Proceed with DMD import logic...
         print(f"Importing DMD file: {binary_file}")
 
+        for coll in bpy.data.collections:
+            bpy.data.collections.remove(coll)
+
         dmd = pydmd.remoteCall(binary_file)
 
         if bpy.context.scene.orph_mat_clear:
