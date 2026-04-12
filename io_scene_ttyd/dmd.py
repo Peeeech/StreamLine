@@ -884,7 +884,7 @@ class DmdModel:
 		for m in materials:
 			if m.name == materialEmpty.name:
 				dmd_material = m
-				print(m.name)
+				#print(m.name)
 				break
 				
 			matNames.append(m.name)
