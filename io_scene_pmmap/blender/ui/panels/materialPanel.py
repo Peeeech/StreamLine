@@ -489,7 +489,7 @@ def draw_materials_panel(layout, context):
 
                     box.prop(sampler, "wrapS")
                     box.prop(sampler, "wrapT")
-                    box.prop(sampler, "unk_0a")
+                    box.prop(sampler, "texBlendMode")
                     box.prop(sampler, "unk_0b")
 
                     imgheader = box.row(align=True)

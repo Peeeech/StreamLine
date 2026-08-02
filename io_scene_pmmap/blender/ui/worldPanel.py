@@ -1438,16 +1438,16 @@ class TTYDWorldPanel(bpy.types.Panel):
         elif obj.type == 'MESH':
             props = obj.ttyd_world_mesh
 
-             # -------------------------
-            # Local Mesh IR
-            # -------------------------
-
             layout.operator("ttyd.set_camroad_object", icon='OUTLINER_DATA_MESH')
             layout.prop(props, "isCamRoadRegion")
             if props.isCamRoadRegion:
                 bbox_box = layout.box()
                 bbox_box.prop(props, "bbox_min")
                 bbox_box.prop(props, "bbox_max")
+
+            # -------------------------
+            # Local Mesh IR
+            # -------------------------
 
             IRbox = layout.box()
             row = IRbox.row()
