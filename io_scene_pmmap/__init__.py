@@ -21,7 +21,7 @@ from .blender import lights
 from .blender import animations
 
 from .blender.ui import worldPanel as panel
-#from .blender.ui import workspace
+from .blender.ui import workspace
 from .blender.ui.helpers import cameraRaycast
 
 #from .render import flattenSceneGraph
@@ -401,13 +401,13 @@ def register():
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     
     # External registers
-    #workspace.register()
+    workspace.register()
     cameraRaycast.register()
 
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
-    #workspace.unregister()
+    workspace.unregister()
     cameraRaycast.unregister()
 
     objattributes = ["ttyd_world_mesh", "ttyd_world_empty", "ttyd_world_light", "ttyd_world_material",]
