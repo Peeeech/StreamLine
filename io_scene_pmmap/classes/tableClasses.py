@@ -32,6 +32,11 @@ class VCDDataNP:
     values: np.ndarray
 
 @dataclass
+class VCDDataNPList:
+    count: int
+    values: list[np.ndarray]
+
+@dataclass
 class VCDData:
     count: int
     values: list
@@ -216,13 +221,13 @@ class mesh:
 
 @dataclass
 class sceneData:
-    positionData: Optional[VCDData] = None
-    normalData: Optional[VCDData] = None
-    colorData: Optional[VCDData] = None
-    textureCoordinateData: Optional[VCDData] = None
-    lightData: list = field(default_factory=list)
-    animationData: list = field(default_factory=list)
-    materialData: list = field(default_factory=list)
+    positionData: Optional[VCDDataNP] = None
+    normalData: Optional[VCDDataNP] = None
+    colorData: Optional[VCDDataNP] = None
+    textureCoordinateData: Optional[VCDDataNPList] = None
+    lightData: Optional[VCDData] = None
+    animationData: Optional[VCDData] = None
+    materialData: Optional[VCDData] = None
 
 @dataclass
 class sceneGraphRoot:
