@@ -430,49 +430,61 @@ def decode_RGB5A3(raw_data, height, width):
 # ================================ RGBA32 DECOMPRESSION ========================
 def decode_RGBA32(raw_data, height, width):
     """
-    RGBA32 => 4 bytes per pixel, stored in 4×4 tiles => 16 pixels => 64 bytes.
-    We'll assume the layout is [R][G][B][A] in big-endian for each pixel.
-    Some docs mention ARGB or other orders, so adjust as needed.
-    """
+    GameCube/Wii RGBA32 (RGBA8) (GX_TF_RGBA8)
 
+    Stored as 4x4 tiles (64 bytes each):
+
+        First 32 bytes:
+            A0 R0  A1 R1  ...
+
+        Second 32 bytes:
+            G0 B0  G1 B1  ...
+
+    """
 
     tile_w = 4
     tile_h = 4
-    bytes_per_pixel = 4
-    tile_size = tile_w * tile_h * bytes_per_pixel  # 16 px => 64 bytes
+    tile_size = 64
 
     tiles_x = (width  + tile_w - 1) // tile_w
     tiles_y = (height + tile_h - 1) // tile_h
-    
+
     rgba = bytearray(width * height * 4)
 
     offset = 0
+
     for ty in range(tiles_y):
         for tx in range(tiles_x):
-            # read 64 bytes for one 4×4 tile
-            tile_data = raw_data[offset : offset + tile_size]
+
+            tile = raw_data[offset:offset + tile_size]
             offset += tile_size
 
-            pixel_i = 0
+            ar = tile[:32]
+            gb = tile[32:]
+
+            pixel = 0
+
             for row in range(tile_h):
-                iy = ty*tile_h + row
+                iy = ty * tile_h + row
                 if iy >= height:
                     break
+
                 for col in range(tile_w):
-                    ix = tx*tile_w + col
+                    ix = tx * tile_w + col
                     if ix >= width:
                         break
 
-                    # read RGBA (4 bytes) in big-endian
-                    R = tile_data[pixel_i + 0]
-                    G = tile_data[pixel_i + 1]
-                    B = tile_data[pixel_i + 2]
-                    A = tile_data[pixel_i + 3]
-                    pixel_i += 4
+                    A = ar[pixel * 2 + 0]
+                    R = ar[pixel * 2 + 1]
+
+                    G = gb[pixel * 2 + 0]
+                    B = gb[pixel * 2 + 1]
 
                     idx = (iy * width + ix) * 4
                     rgba[idx:idx+4] = (R, G, B, A)
-    
+
+                    pixel += 1
+
     return rgba
 
 # ================================ C4 DECOMPRESSION ============================
