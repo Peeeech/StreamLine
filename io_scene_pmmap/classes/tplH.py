@@ -12,6 +12,14 @@ class TPLHeader:
             f"image_count={self.image_count}, "
             f"image_table_offset=0x{self.image_table_offset:08X})"
         )
+    
+@dataclass
+class TPLPalHeader:
+    count: int
+    format: int
+    #data_addr -> moved to serialization logic to re-use for encoding
+    data: bytes
+    data_addr: int = 0
 
 @dataclass
 class TPLImage:
@@ -21,7 +29,7 @@ class TPLImage:
     height: int
     format: int
 
-    data_addr: int
+    #data_addr -> moved to serialization logic to re-use for encoding
     raw_data: bytes
 
     wrap_s: int
@@ -32,14 +40,15 @@ class TPLImage:
     edge_lod_enable: int
     min_lod: int
     max_lod: int
-
+    
+    data_addr: int = 0
     palette_addr: int | None = None
-    palette_data: bytes | None = None
+    palette: TPLPalHeader | None = None
 
     def __repr__(self) -> str:
         # intentionally omit raw_data / palette_data (huge)
         raw_len = len(self.raw_data) if self.raw_data is not None else 0
-        pal_len = len(self.palette_data) if self.palette_data else 0
+        pal_len = len(self.palette.data) if self.palette else 0
 
         return (
             "TPLImage("
