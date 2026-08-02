@@ -54,12 +54,13 @@ def build_anims_from_scene(data, matprefix="", context=None):
                 obj_origin = joint.location
                 anim_origin = [track.anim_origin.x, track.anim_origin.y, track.anim_origin.z]
                 anim_scale = [track.anim_scale.x, track.anim_scale.y, track.anim_scale.z]
-                anim_delta = [track.obj_pos_delta.x, track.obj_pos_delta.y, track.obj_pos_delta.z]
+                anim_pivot = [track.obj_pos_delta.x, track.obj_pos_delta.y, track.obj_pos_delta.z]
                 joint.ttyd_attributes.anim_origin = (track.anim_origin.x, track.anim_origin.y, track.anim_origin.z)
-                joint.ttyd_attributes.origin_offset = blenderTrack.anim_delta = (anim_delta[0], anim_delta[1], anim_delta[2])
+                joint.ttyd_attributes.origin_offset = blenderTrack.anim_pivot = (anim_pivot[0], anim_pivot[1], anim_pivot[2])
 
-                action = make_transform_action(traType, i, joint, obj_origin, anim_origin, anim_scale, anim_delta, trackName, track)
+                action = make_transform_action(traType, i, joint, obj_origin, anim_origin, anim_pivot, trackName, track)
                 blenderTrack.action = action
+
 
         if bundle.mat_uv is not None:
             animProps.uv = True
@@ -164,10 +165,8 @@ def build_anims_from_scene(data, matprefix="", context=None):
                 #lights don't have these, so use defaults
                 obj_origin = [0, 0, 0]
                 anim_origin = [0, 0, 0]
-                anim_scale = [1, 1, 1]
-                anim_delta = [0, 0, 0]
 
-                action = make_transform_action(traType, i, joint, obj_origin, anim_origin, anim_scale, anim_delta, trackName, track)
+                action = make_transform_action(traType, i, joint, obj_origin, anim_origin, anim_pivot, trackName, track)
                 blenderTrack.action = action
 
         if bundle.light_param is not None:
@@ -241,7 +240,7 @@ def insert_hermite_key(fcu, is_step, time, value, tan_in, tan_out, prev_time=Non
 
     return kp
 
-def build_transform_action_from_dmd(track, obj, obj_origin, anim_origin, anim_scale, anim_delta, action_name):
+def build_transform_action_from_dmd(track, obj, obj_origin, anim_origin, anim_pivot, action_name):
     action = bpy.data.actions.new(action_name)
     ad = obj.animation_data_create()
     ad.action = action
@@ -257,11 +256,19 @@ def build_transform_action_from_dmd(track, obj, obj_origin, anim_origin, anim_sc
 
             is_step = kf.translation[idx].bStep
 
+            print(obj.name)
+            print(f"form: " + f"{kf.translation[idx].value} + {obj_origin[idx]} - {anim_origin[idx]}")
+            print(f"\n\nFinal: {kf.translation[idx].value + obj_origin[idx] - anim_origin[idx]}")
+            print("pivot: " + f"{anim_pivot[idx]}")
+            print("loc: " + f"{obj.location[idx]}")
+
+            print(f"\nLight {obj.name}\n" if obj.ttyd_world_empty.isLight else f"\nJoint {obj.name}\n")
+
             insert_hermite_key(
                 fcu,
                 is_step,
                 time=kf.time,
-                value=kf.translation[idx].value + obj_origin[idx] - anim_origin[idx],
+                value=kf.translation[idx].value  + ((anim_pivot[idx] - anim_origin[idx]) if not obj.ttyd_world_empty.isLight else obj_origin[idx] - anim_origin[idx]),
                 tan_in=kf.translation[idx].tangentIn,
                 tan_out=kf.translation[idx].tangentOut,
                 prev_time=prev_t,
@@ -319,7 +326,7 @@ def build_transform_action_from_dmd(track, obj, obj_origin, anim_origin, anim_sc
 
     return action
 
-def make_transform_action(traType, track_idx, target, obj_origin, anim_origin, anim_scale, anim_delta, trackName, dmd_track):
+def make_transform_action(traType, track_idx, target, obj_origin, anim_origin, anim_pivot, trackName, dmd_track):
     animData = target.animation_data_create()
 
     action = build_transform_action_from_dmd(
@@ -328,8 +335,7 @@ def make_transform_action(traType, track_idx, target, obj_origin, anim_origin, a
 
         obj_origin=obj_origin,
         anim_origin=anim_origin,
-        anim_scale=anim_scale,
-        anim_delta=anim_delta,
+        anim_pivot=anim_pivot,
         action_name = f"[{traType}]{target.name}_{trackName}_T{track_idx:03d}"
     )
 

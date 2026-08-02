@@ -418,7 +418,7 @@ def build_geometry_from_scenegraph(root_node: Any, context=None, debug=None):
                     attr.hit_type = hit_attributes_to_enum(hit)
                     attr.hit_val = hit
                     
-                    _preview_mat_with_drawmode(node_obj, mesh, props, attr, mat_empty, matprefix)
+                    _preview_mat_with_drawmode(node_obj, mesh, props, attr, mat_empty)
 
                     stats["meshes_built"] += 1
             else:
@@ -523,7 +523,7 @@ def build_geometry_from_scenegraph(root_node: Any, context=None, debug=None):
                 attr.wFlags = wFlags
                 attr.hit_type = hit_attributes_to_enum(hit)
                 attr.hit_val = hit
-                _preview_mat_with_drawmode(obj, mesh, props, attr, mat_empty, matprefix)
+                _preview_mat_with_drawmode(obj, mesh, props, attr, mat_empty)
 
                 ref = node_obj.ttyd_world_empty.meshMembers.add()
                 ref.obj = obj
@@ -538,7 +538,7 @@ def build_geometry_from_scenegraph(root_node: Any, context=None, debug=None):
     _dbg(debug, f"=== DONE: {stats} ===")
     return stats
 
-def _preview_mat_with_drawmode(obj, mesh, props, attr, mat_empty, matprefix):
+def _preview_mat_with_drawmode(obj, mesh, props, attr, mat_empty):
     if mat_empty is None:
         return
     props.emptyMaterial = mat_empty
