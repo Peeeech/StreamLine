@@ -10,17 +10,21 @@ from . import pydmd
 from .parsers import tplparse as ptpl
 from .parsers import camparse as pcam
 
-from .materials import decode as txDc
-from .materials import imageStream as txIS
+from .materials import pytpl as tpl
 from .materials import images as txImg
 from .materials import materials as txMat
 
 from .blender import cam
 from .blender import geometries
 from .blender import streamLine
-from .blender import panel
 from .blender import lights
 from .blender import animations
+
+from .blender.ui import worldPanel as panel
+from .blender.ui import workspace
+from .blender.ui.helpers import cameraRaycast
+
+#from .render import flattenSceneGraph
 
 geomDebug = True
 
@@ -41,7 +45,13 @@ bl_info = {
 
 def import_from_path(name, path):
     spec = importlib.util.spec_from_file_location(name, os.path.join(addon_dir, path))
+    if not spec:
+        raise Exception
+
     module = importlib.util.module_from_spec(spec)
+    if not module or spec.loader is None:
+        raise Exception
+
     spec.loader.exec_module(module)
     return module
 
@@ -87,15 +97,88 @@ class ImportBinaryFileOperator(bpy.types.Operator):
         # Proceed with DMD import logic...
         print(f"Importing DMD file: {binary_file}")
 
-        for coll in bpy.data.collections:
-            bpy.data.collections.remove(coll)
-
         dmd = pydmd.remoteCall(binary_file)
+        if not isinstance(dmd, pydmd.DMDFile):
+            raise Exception("This should never trigger.")
+
+        """
+        Architecture split: Blender backend vs Render backend
+        =====================================================
+
+        At this point the importer diverges into two separate backends which both
+        come from the same parsed/localized DMD scene graph, but serve different roles.
+
+        Blender backend
+        ---------------
+        Role:
+            Authoritative authoring/export shell.
+
+        Purpose:
+            The Blender scene is intentionally expanded into many objects, empties,
+            PropertyGroups, Actions/NLA tracks, material containers, texture containers,
+            etc.
+
+            This is not meant to be the fastest or simplest runtime representation.
+            It exists so that:
+                - Blender can display, select, inspect, and edit DMD data.
+                - Properties can be modified through normal Blender UI/RNA paths.
+                - The exporter can remain dumb and stable.
+                - Export can simply walk named properties/containers and serialize them
+                back into a DMD-like file without re-inferring meaning from raw meshes.
+
+        Notes:
+            Blender-side data is the long-lived editable representation. It preserves
+            structure and metadata even when the render backend uses a more compact form.
+
+
+        Render backend
+        --------------
+        Role:
+            Derivative runtime/render representation.
+
+        Purpose:
+            The render backend receives a flattened binary scene blob representing the
+            DMD node scene graph in a renderer-friendly form.
+
+            This blob is built from the parsed/localized scene graph, not by walking
+            Blender's evaluated scene every frame.
+
+            Offsets/pointers from the original DMD-style graph are localized into stable
+            integer IDs. These IDs are also usable as direct indexes into typed arrays.
+
+        Example:
+            material_id = 57
+
+            Instead of storing a pointer to material 57, the render blob stores:
+
+                material_id = 57
+
+            The C++ renderer can resolve this as:
+
+                material_base + (material_id * sizeof(MaterialWork))
+
+            or, conceptually:
+
+                materials[material_id]
+
+            This mirrors the style of the original game/runtime work arrays while
+            avoiding raw process pointers in the serialized blob.
+
+        Important:
+            The render blob is derived from the authoritative local/Blender-side data.
+            It is allowed to be rebuilt, replaced, or optimized at any time.
+
+            The C++ renderer should consume the blob, validate/resolve IDs, and build
+            its own runtime state. It should not depend on Blender object traversal or
+            Python object lifetimes during rendering.
+        """
 
         if bpy.context.scene.orph_mat_clear:
             for mat in list(bpy.data.materials):
                 if mat.users == 0:
                     bpy.data.materials.remove(mat)
+            for img in list(bpy.data.images):
+                bpy.data.images.remove(img)
 
         if bpy.context.scene.tex_import:
             try:
@@ -157,15 +240,20 @@ class ImportBinaryFileOperator(bpy.types.Operator):
             else:
                 os.makedirs(tex_dir)
 
-            header, tpl = ptpl.parse_tpl(t_file)
+
+            header, images = ptpl.parse_tpl(t_file)
+
+            #flatScene = flattenSceneGraph.main(dmd, tpl=(header, images))
+
+            #return {'FINISHED'}
+
+            tpl.clear_directory(tex_dir)
+
+            for i, image in enumerate(images):
+                tpl.writeImage(tex_dir, i, image)
+
             if c_file:
                 cam_road = pcam.parse_cam_road(c_file)
-
-            txIS.extract_tpl_to_png(t_file, tex_dir)
-
-            #Decode images
-            print(f"\nDecoding Tex folder: {tex_dir}\n")            
-            txDc.decode(tex_dir)
 
             #Rename images            
             print(f"\nRenaming Tex files in: {tex_dir}\n")
@@ -189,7 +277,7 @@ class ImportBinaryFileOperator(bpy.types.Operator):
 
             #Create imageEmpties
             print(f"\nCreating images (empty containers) with tpl data\n")
-            images = txImg.build_images_from_scene(tpl, tex_list, context)
+            images = txImg.build_images_from_scene(images, tex_list, context)
 
             #Create materialEmpties
             print(f"\nCreating materials (empty containers) with image data\n")
@@ -233,7 +321,6 @@ def menu_func_import(self, context):
     self.layout.operator(ImportBinaryFileOperator.bl_idname, text="Import DMD Map File (d)")
 
 #region: register
-_registered = False
 
 classes = (
     ImportBinaryFileOperator,
@@ -251,10 +338,11 @@ classes = (
     panel.TTYD_OT_add_joint_anim_track,
     panel.TTYD_OT_remove_joint_anim_track,
     panel.TTYD_OT_sync_joint_anim_tracks,
-    panel.TTYD_OT_sync_joint_anim_delta_from_loc,
+    panel.TTYD_OT_sync_joint_anim_pivot_from_loc,
     panel.TTYD_OT_select_object,
     panel.TTYD_OT_rebuild_local_ir,
     panel.TTYD_OT_rebuild_camroad_ir,
+    panel.TTYD_OT_set_active_camroad_object,
     panel.TTYD_OT_stripify_mesh,
     panel.TTYDLocalVertex,
     panel.TTYDLocalPrimitive,
@@ -282,83 +370,61 @@ classes = (
     panel.TTYDEmptyMaterialProperties,
 
     panel.TTYDMaterialProperties,
-    panel.TTYDMaterialPanel,
     panel.TTYDWorldPanel,
 )
 
 def register():
-    global _registered
-    if _registered:
-        return
     for cls in classes:
-        bpy.utils.register_class(cls)
+        try:
+            bpy.utils.register_class(cls)
+        except:
+            pass
 
-    bpy.types.Object.ttyd_world_mesh = bpy.props.PointerProperty(
-        type=panel.TTYDWorldMeshProperties
-    )
 
-    bpy.types.Object.ttyd_world_empty = bpy.props.PointerProperty(
-        type=panel.TTYDWorldEmptyProperties
-    )
-
-    bpy.types.Object.ttyd_world_curve = bpy.props.PointerProperty(
-        type=panel.TTYDWorldCurveProperties
-    )
-
-    bpy.types.Object.ttyd_attributes = bpy.props.PointerProperty(
-        type=panel.TTYDJointAttributes
-    )
-
-    bpy.types.Object.ttyd_world_animation = bpy.props.PointerProperty(
-        type=panel.TTYDEmptyAnimationProperties
-    )
-
-    bpy.types.Object.ttyd_world_light = bpy.props.PointerProperty(
-        type=panel.TTYDLightProperties
-    )
-
-    bpy.types.Object.ttyd_world_material = bpy.props.PointerProperty(
-        type=panel.TTYDEmptyMaterialProperties
-    )
-
-    bpy.types.Object.ttyd_world_texture = bpy.props.PointerProperty(
-        type=panel.TTYDEmptyTextureProperties
-    )
-
-    bpy.types.Material.meshReferences = bpy.props.PointerProperty(
-        type=panel.TTYDMaterialProperties
-    )
+    # Custom properties for objects and materials
+    bpy.types.Object.ttyd_world_mesh = bpy.props.PointerProperty(type=panel.TTYDWorldMeshProperties)
+    bpy.types.Object.ttyd_world_empty = bpy.props.PointerProperty(type=panel.TTYDWorldEmptyProperties)
+    bpy.types.Object.ttyd_world_curve = bpy.props.PointerProperty(type=panel.TTYDWorldCurveProperties)
+    bpy.types.Object.ttyd_attributes = bpy.props.PointerProperty(type=panel.TTYDJointAttributes)
+    bpy.types.Object.ttyd_world_animation = bpy.props.PointerProperty(type=panel.TTYDEmptyAnimationProperties)
+    bpy.types.Object.ttyd_world_light = bpy.props.PointerProperty(type=panel.TTYDLightProperties)
+    bpy.types.Object.ttyd_world_material = bpy.props.PointerProperty(type=panel.TTYDEmptyMaterialProperties)
+    bpy.types.Object.ttyd_world_texture = bpy.props.PointerProperty(type=panel.TTYDEmptyTextureProperties)
+    bpy.types.Material.meshReferences = bpy.props.PointerProperty(type=panel.TTYDMaterialProperties)
     
-    bpy.types.Scene.tex_import = bpy.props.BoolProperty(
-        name="Import Textures",
-        description="Pulls 't' file from same directory to create textures for materials",
-        default=True,
-    )  # type: ignore
+    # Custom import settings
+    bpy.types.Scene.tex_import = bpy.props.BoolProperty(name="Import Textures", description="Pulls 't' file from same directory to create textures for materials", default=True)  # type: ignore
+    bpy.types.Scene.orph_mat_clear = bpy.props.BoolProperty(name="Delete Materials", description="Deletes existing material data in the blender file", default=True)  # type: ignore
+    bpy.types.Scene.mat_prefix = bpy.props.StringProperty(name="Only use for previewing reasons to avoid material overlap. They will break roundtrip logic if not replacing TPL.", default="") #type: ignore
 
-    bpy.types.Scene.orph_mat_clear = bpy.props.BoolProperty(
-        name="Delete Materials",
-        description="Deletes existing material data in the blender file",
-        default=True,
-    )  # type: ignore
-
-    bpy.types.Scene.mat_prefix = bpy.props.StringProperty(
-        name="Only use for previewing reasons to avoid material overlap. They will break roundtrip logic if not replacing TPL.",
-        default="",
-    ) #type: ignore
-
+    # Add the import option to the File > Import menu
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     
-    _registered = True
+    # External registers
+    workspace.register()
+    cameraRaycast.register()
 
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
-    del bpy.types.Object.ttyd_world_mesh
-    del bpy.types.Object.ttyd_world_empty
-    del bpy.types.Object.ttyd_world_light
-    del bpy.types.Object.ttyd_world_material
-    del bpy.types.Scene.mat_prefix
-    del bpy.types.Scene.orph_mat_clear
-    del bpy.types.Scene.tex_import
+
+    workspace.unregister()
+    cameraRaycast.unregister()
+
+    objattributes = ["ttyd_world_mesh", "ttyd_world_empty", "ttyd_world_light", "ttyd_world_material",]
+    sceneattributes = ["mat_prefix", "orph_mat_clear", "tex_import",]
+
+    for attr in objattributes:
+        if hasattr(bpy.types.Object, attr):
+            attribute = getattr(bpy.types.Object, attr)
+            del attribute
+
+    for attr in sceneattributes:
+        if hasattr(bpy.types.Scene, attr):
+            attribute = getattr(bpy.types.Scene, attr)
+            del attribute
 
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+        try:
+            bpy.utils.unregister_class(cls)
+        except:
+            pass
