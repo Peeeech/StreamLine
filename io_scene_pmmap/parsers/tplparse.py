@@ -27,6 +27,9 @@ IMG_FMT_C8      = 0x09
 IMG_FMT_C14X2   = 0x0A
 IMG_FMT_CMPR    = 0x0E
 
+PAL_FMT_IA8     = 0x00
+PAL_FMT_RGB565  = 0x01
+PAL_FMT_RGB5A3  = 0x02
 
 # ------------------------------------------------------------
 # Helpers
@@ -50,6 +53,13 @@ def _parse_header(f) -> tplH.TPLHeader:
         magic=magic,
         image_count=count,
         image_table_offset=imgtab_off
+    )
+
+def _parse_pal_header(f, offset):
+    f.seek(offset)
+    return _read_struct(
+        f,
+        ">HBBII"
     )
 
 
@@ -93,6 +103,11 @@ def parse_tpl(path: str) -> Tuple[tplH.TPLHeader, List[tplH.TPLImage]]:
                 lod_bias, edge_lod_enable,
                 min_lod, max_lod
             ) = _parse_image_header(f, img_off)
+            (
+                entryCount,
+                unused_02, unused_03,
+                format, pal_data_addr,
+            ) = _parse_pal_header(f, pal_off)
 
             # Determine data end (MIRROR imageStream: next image's data_addr, not next img header offset)
             if i + 1 < header.image_count:
@@ -106,6 +121,22 @@ def parse_tpl(path: str) -> Tuple[tplH.TPLHeader, List[tplH.TPLImage]]:
 
             f.seek(data_addr)
             raw_data = f.read(data_end - data_addr)
+
+            if pal_off == 0:
+                palette = None
+                pass
+
+            else:
+
+                f.seek(pal_data_addr)
+                pal_data = f.read(2 * entryCount) #2b per pix
+
+                palette = tplH.TPLPalHeader(
+                    count=entryCount,
+                    format=format,
+                    data_addr=pal_data_addr,
+                    data=pal_data
+                )
 
             images.append(
                 tplH.TPLImage(
@@ -124,7 +155,7 @@ def parse_tpl(path: str) -> Tuple[tplH.TPLHeader, List[tplH.TPLImage]]:
                     min_lod=min_lod,
                     max_lod=max_lod,
                     palette_addr=None if pal_off == 0 else pal_off,
-                    palette_data=None 
+                    palette=None if palette == None else palette
                 )
             )
 
