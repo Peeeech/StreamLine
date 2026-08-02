@@ -10,6 +10,8 @@ from . import tpl
 from . import camera_road
 
 def export(context, settings, world_name=None):
+	bpy.context.view_layer.update()
+	
 	# Generate main DMD
 	dmd_file = dmd.DmdFile.from_blender_scene(
 		context.scene,
