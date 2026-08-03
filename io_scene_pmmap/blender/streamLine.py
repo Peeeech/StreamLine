@@ -80,6 +80,10 @@ def create_and_setup_collections(direct_children):
             add_object_hierarchy_to_collection(obj, cam_col)
 
     for wrapper in direct_children:
+        """
+        TODO: Use raw pointer to S and A roots to ensure correctness. this is crass
+        """
+
         name = wrapper.name or ""
         first = name[0].upper() if name else ""
         last  = name[-1].upper() if name else ""

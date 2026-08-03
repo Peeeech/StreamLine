@@ -1,6 +1,16 @@
 import bpy #type: ignore
 import math
 
+
+def checkVisMode():
+    mode = getattr(bpy.types.Scene, "visual_map", None)
+
+    if not mode:
+        raise Exception("[FATAL] Visual Map scene object returned none")
+
+    return bpy.context.scene.visual_map
+
+
 def _track_display_name(t) -> str:
     # Works for joint/material/light tracks
     return (

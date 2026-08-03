@@ -4,6 +4,16 @@ import re
 import json
 import bpy #type: ignore
 from dataclasses import asdict
+
+
+def checkVisMode():
+    mode = getattr(bpy.types.Scene, "visual_map", None)
+
+    if not mode:
+        raise Exception("[FATAL] Visual Map scene object returned none")
+
+    return bpy.context.scene.visual_map
+
     
 def parseSamplers(samplers):
     return [s for s in samplers if s is not None]
@@ -14,6 +24,8 @@ def build_materials_from_scene(data, images, context=None):
 
     #Phase 1. Make DMDMaterial containers in their own collection so that everything can be preserved, and then blender-variants can interpret from these
     for i, data in enumerate(materials):
+
+
         matEmpty = bpy.data.objects.new(f"{data.name}", None)
         idProp = matEmpty.ttyd_world_empty
         idProp.isMaterial = True
@@ -60,7 +72,9 @@ def build_materials_from_scene(data, images, context=None):
             smp.texture.image = bpy.data.images.get(f"{validSamplers[i].texture.name}")
             smp.texture.name = validSamplers[i].texture.name
             imageEmpty = bpy.data.objects.get(f"{validSamplers[i].texture.name}")
-            imageEmpty.ttyd_world_texture.render_order = validSamplers[i].texture.render_order
+
+            if not checkVisMode():
+                imageEmpty.ttyd_world_texture.render_order = validSamplers[i].texture.render_order
 
             smp.texture.render_order = validSamplers[i].texture.render_order
             smp.texture.wWidth = validSamplers[i].texture.wWidth
@@ -79,26 +93,35 @@ def build_materials_from_scene(data, images, context=None):
         #Phase 2. Create base blender preview material and append the main one to the empty (extras can be appended on their creation)
         makeMaterialPreviewsForEmpty(matEmpty, props, validSamplers=validSamplers)
 
+        if checkVisMode():
+            bpy.data.objects.remove(matEmpty)
+            continue
+
         mats.append(matEmpty)
-    
-    scene = bpy.context.scene
-    master_collection = scene.collection
 
-    mat_collection = bpy.data.collections.get("Materials")
+    if not checkVisMode():    
+        scene = bpy.context.scene
+        master_collection = scene.collection
 
-    if mat_collection is None:
-        mat_collection = bpy.data.collections.new("Materials")
-        master_collection.children.link(mat_collection)
+        mat_collection = bpy.data.collections.get("Materials")
 
-    for i, mat in enumerate(mats):
-        mat_collection.objects.link(mat)
+        if mat_collection is None:
+            mat_collection = bpy.data.collections.new("Materials")
+            master_collection.children.link(mat_collection)
+
+        for i, mat in enumerate(mats):
+            mat_collection.objects.link(mat)
 
     return materials
 
     #TODO: implement non-(2, 2)-mirror math
 
 def makeMaterialPreviewsForEmpty(empty, props, validSamplers=None):
-    material = bpy.data.materials.new(f"[DrawMode 0] {empty.name}")
+    if not checkVisMode():
+        material = bpy.data.materials.new(f"[DrawMode 0] {empty.name}")
+    else:
+        material = bpy.data.materials.new(empty.name)
+
     material.show_transparent_back = False
 
     if validSamplers is None:

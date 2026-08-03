@@ -1,4 +1,5 @@
 import bpy #type: ignore
+from .panels import fogPanel as fog_panel
 from .panels import imagePanel as image_panel
 from .panels import materialPanel as material_panel
 from .panels import jointPanel as joint_panel
@@ -389,12 +390,13 @@ class TTYDGlobalPanel(bpy.types.Panel):
     bl_category = 'PM Map'
 
     def draw(self, context):
+        fog_panel.draw_fog_panel(self.layout, context)
         image_panel.draw_images_panel(self.layout, context)
         material_panel.draw_materials_panel(self.layout, context)
         joint_panel.draw_joint_panel(self.layout, context)
 
 classes = (
-    PMMAP_OT_setup_workspace,
+    #PMMAP_OT_setup_workspace, TODO: fix workspace op (or remove)
     TTYD_OT_select_show,
     PMMAP_PT_image_panel,
     TTYDGlobalPanel
@@ -411,6 +413,12 @@ def register():
             pass
 
     bpy.types.TOPBAR_MT_window.append(draw_menu)
+
+    # Register fog panel UI within the workspace initializer
+    try:
+        fog_panel.register()
+    except Exception as e:
+        print("fog", e)
     # Register image panel UI within the workspace initializer
     try:
         image_panel.register()
@@ -432,6 +440,11 @@ def register():
 def unregister():
     bpy.types.TOPBAR_MT_window.remove(draw_menu)
 
+    # Unregister fog panel
+    try:
+        fog_panel.unregister()
+    except Exception:
+        pass
     # Unregister image panel
     try:
         image_panel.unregister()
