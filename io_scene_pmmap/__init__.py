@@ -25,6 +25,15 @@ from .blender.ui import workspace
 from .blender.ui.helpers import cameraRaycast
 
 #from .render import flattenSceneGraph
+VISUAL_MODE = False
+
+def checkVisMode():
+    mode = getattr(bpy.types.Scene, "visual_map", None)
+
+    if not mode:
+        raise Exception("[FATAL] Visual Map scene object returned none")
+
+    return bpy.context.scene.visual_map
 
 geomDebug = True
 
@@ -96,6 +105,15 @@ class ImportBinaryFileOperator(bpy.types.Operator):
 
         # Proceed with DMD import logic...
         print(f"Importing DMD file: {binary_file}")
+
+        print(binary_file, "1")
+
+        if binary_file[-4:] == ".bin":
+            print("YAAAY")
+
+        print(binary_file, "2")
+
+        #TODO: SPM implementation - consume .bin directly 
 
         dmd = pydmd.remoteCall(binary_file)
         if not isinstance(dmd, pydmd.DMDFile):
@@ -275,16 +293,29 @@ class ImportBinaryFileOperator(bpy.types.Operator):
 
                 img.use_fake_user = True
 
+            #Fill in fog_table data
+            if hasattr(bpy.types.Scene, "ttyd_fog_table"):
+                fProps = bpy.context.scene.ttyd_fog_table
+                fData = dmd.fog_table
+
+                from pprint import pprint
+                pprint(fData)
+
+                fProps.fogEnabled = int(fData.wFogEnabled)
+                fProps.fogMode = int(fData.fogMode)
+                fProps.fogStart = int(fData.fogStart)
+                fProps.fogEnd = int(fData.fogEnd)
+                fProps.fogColor = (fData.fogColor.r / 255, fData.fogColor.g / 255, fData.fogColor.b / 255, fData.fogColor.a / 255)
+
             #Create imageEmpties
-            print(f"\nCreating images (empty containers) with tpl data\n")
-            images = txImg.build_images_from_scene(images, tex_list, context)
+            if not checkVisMode():
+                print(f"\nCreating images (empty containers) with tpl data\n")
+                images = txImg.build_images_from_scene(images, tex_list, context)
 
             #Create materialEmpties
             print(f"\nCreating materials (empty containers) with image data\n")
             matData = dmd.data.materialData
             materials = txMat.build_materials_from_scene(matData, tex_list, context)
-
-            bpy.context.view_layer.update()
 
             for window in bpy.context.window_manager.windows:
                 for area in window.screen.areas:
@@ -299,7 +330,8 @@ class ImportBinaryFileOperator(bpy.types.Operator):
             geometries.build_geometry_from_dmd(dmd, context, geomDebug)
 
             #Create lights
-            lights.build_lights_from_scene(dmd.data.lightData, matprefix, context)
+            if not checkVisMode():
+                lights.build_lights_from_scene(dmd.data.lightData, matprefix, context)
 
             #Flip world axis before baking animations
             streamLine.main(matprefix)
@@ -307,12 +339,31 @@ class ImportBinaryFileOperator(bpy.types.Operator):
             #Create animation tracks
             animations.build_anims_from_scene(dmd.data.animationData, matprefix, context)
 
+        """
+        These should probably go into streamLine for post-processing niceties
+        """
+
+        for screen in bpy.data.screens:
+            for area in screen.areas:
+                if area.type == 'VIEW_3D':
+                    for space in area.spaces:
+                        space.shading.type = 'MATERIAL'
+
+        hitLayCol = bpy.context.view_layer.layer_collection.children['Hit']
+        hitLayCol.exclude = True
+
+        if checkVisMode():
+            bpy.data.collections.remove(bpy.data.collections['Cam'])
+            bpy.data.collections.remove(bpy.data.collections['Unused'])
+            bpy.data.collections.remove(bpy.data.collections['Lights'])
+
         return {'FINISHED'}
     
 
 
     def draw(self, context):
         layout = self.layout
+        layout.prop(context.scene, "visual_map", text="Only Visual")
         layout.prop(context.scene, "tex_import", text="Import Textures")
         layout.prop(context.scene, "orph_mat_clear", text="Clear Existing Materials")
         layout.prop(context.scene, "mat_prefix", text="Prefix for unique material names")
@@ -393,9 +444,11 @@ def register():
     bpy.types.Material.meshReferences = bpy.props.PointerProperty(type=panel.TTYDMaterialProperties)
     
     # Custom import settings
+    bpy.types.Scene.visual_map = bpy.props.BoolProperty(name="Purely Visual Map Geometry", description="Strips custom properties and Local IRs for purely visual map", default=VISUAL_MODE)
+
     bpy.types.Scene.tex_import = bpy.props.BoolProperty(name="Import Textures", description="Pulls 't' file from same directory to create textures for materials", default=True)  # type: ignore
     bpy.types.Scene.orph_mat_clear = bpy.props.BoolProperty(name="Delete Materials", description="Deletes existing material data in the blender file", default=True)  # type: ignore
-    bpy.types.Scene.mat_prefix = bpy.props.StringProperty(name="Only use for previewing reasons to avoid material overlap. They will break roundtrip logic if not replacing TPL.", default="") #type: ignore
+    bpy.types.Scene.mat_prefix = bpy.props.StringProperty(name="deprecated.", description="Only use for previewing reasons to avoid material overlap. They will break roundtrip logic if not replacing TPL.", default="") #type: ignore
 
     # Add the import option to the File > Import menu
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
@@ -411,7 +464,7 @@ def unregister():
     cameraRaycast.unregister()
 
     objattributes = ["ttyd_world_mesh", "ttyd_world_empty", "ttyd_world_light", "ttyd_world_material",]
-    sceneattributes = ["mat_prefix", "orph_mat_clear", "tex_import",]
+    sceneattributes = ["visual_map", "mat_prefix", "orph_mat_clear", "tex_import",]
 
     for attr in objattributes:
         if hasattr(bpy.types.Object, attr):

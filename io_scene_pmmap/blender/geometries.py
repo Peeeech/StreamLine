@@ -11,6 +11,16 @@ except ImportError:
 
 ColorTest = False  # Set to True to disable vertex color extraction (for debugging)
 
+
+def checkVisMode():
+    mode = getattr(bpy.types.Scene, "visual_map", None)
+
+    if not mode:
+        raise Exception("[FATAL] Visual Map scene object returned none")
+
+    return bpy.context.scene.visual_map
+
+
 # -------------------------
 # Tiny debug helpers
 # -------------------------
@@ -231,24 +241,29 @@ def _create_mesh_object(name: str, geom: Any, mesh_entry: Any, debug: bool, pref
     mat_name = mesh_entry.material.name
 
     if mat_name:
-        mat_empty = bpy.data.objects.get(f"{matprefix}{mat_name}")            
-        mats_col = bpy.data.collections.get("Materials")
+        if not checkVisMode():
+            mat_empty = bpy.data.objects.get(f"{matprefix}{mat_name}")            
+            mats_col = bpy.data.collections.get("Materials")
 
-        if (
-            not mat_empty
-            or mat_empty.type != 'EMPTY'
-            or not mats_col
-        ):
-            _dbg(debug, f"{prefix}  [WARN] material EMPTY not found in Materials collection: {mat_name!r}")
-            return obj, me, None
+            if (
+                not mat_empty
+                or mat_empty.type != 'EMPTY'
+                or not mats_col
+            ):
+                _dbg(debug, f"{prefix}  [WARN] material EMPTY not found in Materials collection: {mat_name!r}")
+                return obj, me, None
 
-        mat_props = mat_empty.ttyd_world_material
+            mat_props = mat_empty.ttyd_world_material
 
-        if not mat_props.materialRefs:
-            _dbg(debug, f"{prefix}  [WARN] no material refs on EMPTY: {mat_name!r}")
-            return obj, me, mat_empty
+            if not mat_props.materialRefs:
+                _dbg(debug, f"{prefix}  [WARN] no material refs on EMPTY: {mat_name!r}")
+                return obj, me, mat_empty
 
-        base_mat = mat_props.materialRefs[0].material
+            base_mat = mat_props.materialRefs[0].material
+
+        else:
+            base_mat = bpy.data.materials[f'{mat_name}']
+            mat_empty = None
 
         if len(me.materials) == 0:
             me.materials.append(base_mat)
@@ -371,54 +386,55 @@ def build_geometry_from_scenegraph(root_node: Any, context=None, debug=None):
                             ps = node_obj.parent.matrix_world.to_scale()
                             print("parent world scale:", ps)
 
-                    props = node_obj.ttyd_world_mesh
-                    ir = mesh_entry.local_ir
-                    assert len(ir.positions) == len(ir.normals) == len(ir.uv0s) == len(ir.uv1s) == len(ir.colors), \
-                        f"[IR] attribute array length mismatch on {name}"
-                    for prim in ir.primitives:
-                        for idx in prim.indices:
-                            assert 0 <= idx < len(ir.positions), \
-                                f"[IR] primitive index out of range on {name}: {idx} >= {len(ir.positions)}"
-                            
-                    props.has_nrm = bool(ir.normals) and any(n is not None for n in ir.normals)
-                    props.has_uv0 = bool(ir.uv0s)    and any(u is not None for u in ir.uv0s)
-                    props.has_uv1 = bool(ir.uv1s)    and any(u is not None for u in ir.uv1s)
-                    props.has_col = bool(ir.colors)  and any(c is not None for c in ir.colors)
+                    if not checkVisMode():
+                        props = node_obj.ttyd_world_mesh
+                        ir = mesh_entry.local_ir
+                        assert len(ir.positions) == len(ir.normals) == len(ir.uv0s) == len(ir.uv1s) == len(ir.colors), \
+                            f"[IR] attribute array length mismatch on {name}"
+                        for prim in ir.primitives:
+                            for idx in prim.indices:
+                                assert 0 <= idx < len(ir.positions), \
+                                    f"[IR] primitive index out of range on {name}: {idx} >= {len(ir.positions)}"
+                                
+                        props.has_nrm = bool(ir.normals) and any(n is not None for n in ir.normals)
+                        props.has_uv0 = bool(ir.uv0s)    and any(u is not None for u in ir.uv0s)
+                        props.has_uv1 = bool(ir.uv1s)    and any(u is not None for u in ir.uv1s)
+                        props.has_col = bool(ir.colors)  and any(c is not None for c in ir.colors)
 
-                    props.local_vertices.clear()
-                    props.local_primitives.clear()
+                        props.local_vertices.clear()
+                        props.local_primitives.clear()
 
-                    # --- vertices ---
-                    for i in range(len(ir.positions)):
-                        lv = props.local_vertices.add()
-                        lv.pos = ir.positions[i]
+                        # --- vertices ---
+                        for i in range(len(ir.positions)):
+                            lv = props.local_vertices.add()
+                            lv.pos = ir.positions[i]
 
-                        if ir.normals and ir.normals[i] is not None:
-                            lv.nrm = ir.normals[i]
-                        if ir.uv0s and ir.uv0s[i] is not None:
-                            lv.uv0 = ir.uv0s[i]
-                        if ir.uv1s and ir.uv1s[i] is not None:
-                            lv.uv1 = ir.uv1s[i]
-                        if ir.colors and ir.colors[i] is not None:
-                            r, g, b, a = ir.colors[i]
-                            lv.col = (r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+                            if ir.normals and ir.normals[i] is not None:
+                                lv.nrm = ir.normals[i]
+                            if ir.uv0s and ir.uv0s[i] is not None:
+                                lv.uv0 = ir.uv0s[i]
+                            if ir.uv1s and ir.uv1s[i] is not None:
+                                lv.uv1 = ir.uv1s[i]
+                            if ir.colors and ir.colors[i] is not None:
+                                r, g, b, a = ir.colors[i]
+                                lv.col = (r / 255.0, g / 255.0, b / 255.0, a / 255.0)
 
-                    # --- primitives ---
-                    for prim in ir.primitives:
-                        lp = props.local_primitives.add()
-                        lp.opcode = prim.opcode
-                        lp.indices = ",".join(str(i) for i in prim.indices)
+                        # --- primitives ---
+                        for prim in ir.primitives:
+                            lp = props.local_primitives.add()
+                            lp.opcode = prim.opcode
+                            lp.indices = ",".join(str(i) for i in prim.indices)
 
-                    props.ir_dirty = False
-                    attr = node_obj.ttyd_attributes
-                    attr.light_mask = lightMask
-                    attr.draw_mode = draw
-                    attr.cull_mode = cull_attributes_to_enum(cull)
-                    attr.wFlags = wFlags
-                    attr.hit_type = hit_attributes_to_enum(hit)
-                    attr.hit_val = hit
-                    
-                    _preview_mat_with_drawmode(node_obj, mesh, props, attr, mat_empty)
+                        props.ir_dirty = False
+                        attr = node_obj.ttyd_attributes
+                        attr.light_mask = lightMask
+                        attr.draw_mode = draw
+                        attr.cull_mode = cull_attributes_to_enum(cull)
+                        attr.wFlags = wFlags
+                        attr.hit_type = hit_attributes_to_enum(hit)
+                        attr.hit_val = hit
+                        
+                        _preview_mat_with_drawmode(node_obj, mesh, props, attr, mat_empty)
 
                     stats["meshes_built"] += 1
             else:
@@ -473,60 +489,61 @@ def build_geometry_from_scenegraph(root_node: Any, context=None, debug=None):
                 _parent_local(obj, node_obj)
                 obj.matrix_basis = Matrix.Identity(4)
 
-                props = obj.ttyd_world_mesh
-                props.meshFragment = True
-                props.fragmentParent = node_obj.name
+                if not checkVisMode():
+                    props = obj.ttyd_world_mesh
+                    props.meshFragment = True
+                    props.fragmentParent = node_obj.name
 
-                ir = mesh_entry.local_ir
-                assert len(ir.positions) == len(ir.normals) == len(ir.uv0s) == len(ir.uv1s) == len(ir.colors), \
-                    f"[IR] attribute array length mismatch on {name}"
-                for prim in ir.primitives:
-                    for idx in prim.indices:
-                        assert 0 <= idx < len(ir.positions), \
-                            f"[IR] primitive index out of range on {name}: {idx} >= {len(ir.positions)}"
+                    ir = mesh_entry.local_ir
+                    assert len(ir.positions) == len(ir.normals) == len(ir.uv0s) == len(ir.uv1s) == len(ir.colors), \
+                        f"[IR] attribute array length mismatch on {name}"
+                    for prim in ir.primitives:
+                        for idx in prim.indices:
+                            assert 0 <= idx < len(ir.positions), \
+                                f"[IR] primitive index out of range on {name}: {idx} >= {len(ir.positions)}"
 
-                props.has_nrm = bool(ir.normals) and any(n is not None for n in ir.normals)
-                props.has_uv0 = bool(ir.uv0s)    and any(u is not None for u in ir.uv0s)
-                props.has_uv1 = bool(ir.uv1s)    and any(u is not None for u in ir.uv1s)
-                props.has_col = bool(ir.colors)  and any(c is not None for c in ir.colors)
+                    props.has_nrm = bool(ir.normals) and any(n is not None for n in ir.normals)
+                    props.has_uv0 = bool(ir.uv0s)    and any(u is not None for u in ir.uv0s)
+                    props.has_uv1 = bool(ir.uv1s)    and any(u is not None for u in ir.uv1s)
+                    props.has_col = bool(ir.colors)  and any(c is not None for c in ir.colors)
 
-                props.local_vertices.clear()
-                props.local_primitives.clear()
+                    props.local_vertices.clear()
+                    props.local_primitives.clear()
 
-                # --- vertices ---
-                for i in range(len(ir.positions)):
-                    lv = props.local_vertices.add()
-                    lv.pos = ir.positions[i]
+                    # --- vertices ---
+                    for i in range(len(ir.positions)):
+                        lv = props.local_vertices.add()
+                        lv.pos = ir.positions[i]
 
-                    if ir.normals and ir.normals[i] is not None:
-                        lv.nrm = ir.normals[i]
-                    if ir.uv0s and ir.uv0s[i] is not None:
-                        lv.uv0 = ir.uv0s[i]
-                    if ir.uv1s and ir.uv1s[i] is not None:
-                        lv.uv1 = ir.uv1s[i]
-                    if ir.colors and ir.colors[i] is not None:
-                        r, g, b, a = ir.colors[i]
-                        lv.col = (r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+                        if ir.normals and ir.normals[i] is not None:
+                            lv.nrm = ir.normals[i]
+                        if ir.uv0s and ir.uv0s[i] is not None:
+                            lv.uv0 = ir.uv0s[i]
+                        if ir.uv1s and ir.uv1s[i] is not None:
+                            lv.uv1 = ir.uv1s[i]
+                        if ir.colors and ir.colors[i] is not None:
+                            r, g, b, a = ir.colors[i]
+                            lv.col = (r / 255.0, g / 255.0, b / 255.0, a / 255.0)
 
-                # --- primitives ---
-                for prim in ir.primitives:
-                    lp = props.local_primitives.add()
-                    lp.opcode = prim.opcode
-                    lp.indices = ",".join(str(i) for i in prim.indices)
+                    # --- primitives ---
+                    for prim in ir.primitives:
+                        lp = props.local_primitives.add()
+                        lp.opcode = prim.opcode
+                        lp.indices = ",".join(str(i) for i in prim.indices)
 
-                props.ir_dirty = False
+                    props.ir_dirty = False
 
-                attr = node_obj.ttyd_attributes
-                attr.light_mask = lightMask
-                attr.draw_mode = draw
-                attr.cull_mode = cull_attributes_to_enum(cull)
-                attr.wFlags = wFlags
-                attr.hit_type = hit_attributes_to_enum(hit)
-                attr.hit_val = hit
-                _preview_mat_with_drawmode(obj, mesh, props, attr, mat_empty)
+                    attr = node_obj.ttyd_attributes
+                    attr.light_mask = lightMask
+                    attr.draw_mode = draw
+                    attr.cull_mode = cull_attributes_to_enum(cull)
+                    attr.wFlags = wFlags
+                    attr.hit_type = hit_attributes_to_enum(hit)
+                    attr.hit_val = hit
+                    _preview_mat_with_drawmode(obj, mesh, props, attr, mat_empty)
 
-                ref = node_obj.ttyd_world_empty.meshMembers.add()
-                ref.obj = obj
+                    ref = node_obj.ttyd_world_empty.meshMembers.add()
+                    ref.obj = obj
 
                 stats["meshes_built"] += 1
 
@@ -575,7 +592,7 @@ def _preview_mat_with_drawmode(obj, mesh, props, attr, mat_empty):
             newRef.material = newMat
 
             if attr.draw_mode == 1: #Default material created--vtxCol/matSrc blended in
-                newMat.blend_method = 'CLIP'
+                newMat.blend_method = 'BLEND'
 
             if attr.draw_mode == 2: #Clipped texImage + blended alpha tex?
                 newMat.blend_method = 'BLEND' #'MAYBE(?)' overrides material blend mode?
@@ -602,8 +619,11 @@ def tevSwap(material, tevMode, nodes, links):
     if tevMode == 0:
         return material
     elif tevMode == 1:
+        #base colors
         tex0 = nodes.get("TEX0")
         tex1 = nodes.get("TEX1")
+        col0 = nodes.get("Color0")
+
         color0 = nodes.get("Color0 Mix")
         color1 = nodes.get("Color1 Mix")
         alpha0 = nodes.get("Alpha0 Mix")
@@ -619,22 +639,39 @@ def tevSwap(material, tevMode, nodes, links):
         ):
             newcol1 = nodes.new(type='ShaderNodeMixRGB')
             newcol1.location = color1.location
+            newalph1 = nodes.new(type='ShaderNodeMixRGB')
+            newalph1.location = alpha1.location
+
             col1NameBackup = color1.name
             alp1NameBackup = alpha1.name
 
             nodes.remove(color1)
             nodes.remove(alpha1)
             newcol1.name = col1NameBackup
+            newalph1.name = alp1NameBackup
 
+            #restore tex col -> col mix
             links.new(tex0.outputs['Color'], newcol1.inputs[1])
             links.new(tex1.outputs['Color'], newcol1.inputs[2])
-            newcol1.inputs[0].default_value = 0.0
-            links.new(newcol1.outputs['Color'], color0.inputs[0])
 
-            if alpha0 is not None:
-                links.new(tex0.outputs['Alpha'], alpha0.inputs[0])
-            else:
-                links.new(tex0.outputs['Alpha'], shadermix.inputs['Fac'])
+            #set defaults and move for clarity/visibility
+            newcol1.blend_type = 'ADD'
+            newalph1.blend_type = 'ADD'
+
+            col0.location.x -= 200
+            newcol1.location.x += 100
+            newalph1.location.x += 100
+
+
+            #restore alpha connections and set 1/2 fac
+            links.new(tex0.outputs['Alpha'], newalph1.inputs[1])
+            links.new(tex1.outputs['Alpha'], newalph1.inputs[2])
+            newalph1.inputs[0].default_value = 0.5
+
+            #restore outward connections
+            links.new(newcol1.outputs['Color'], color0.inputs[0])
+            links.new(col0.outputs['Alpha'], newcol1.inputs[0])
+            links.new(newalph1.outputs[0], shadermix.inputs['Fac'])
 
         return material
     elif tevMode == 7:
