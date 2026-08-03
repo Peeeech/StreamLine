@@ -2178,14 +2178,24 @@ class DmdFile:
 		link_reference_table(linker, "curve_table", "curve_table", [])
 
 		# Fog table
-		# todo-blender_io_ttyd: Expose fog settings to user
 		fog_table_blob_name = "fog_table"
 		fog_table_data = bytearray(0x14)
-		struct.pack_into(">L", fog_table_data, 0x00, 0) # Fog enabled
-		struct.pack_into(">L", fog_table_data, 0x04, 0) # Fog mode
-		struct.pack_into(">f", fog_table_data, 0x08, 0) # Fog start
-		struct.pack_into(">f", fog_table_data, 0x0c, 1000) # Fog end
-		struct.pack_into(">L", fog_table_data, 0x10, 0x000000FF) # Fog color
+
+		if hasattr(bpy.types.Scene, "ttyd_fog_table"):
+			fog_props = bpy.context.scene.ttyd_fog_table
+			struct.pack_into(">L", fog_table_data, 0x00, fog_props.fogEnabled)
+			struct.pack_into(">L", fog_table_data, 0x04, fog_props.fogMode)
+			struct.pack_into(">f", fog_table_data, 0x08, fog_props.fogStart)
+			struct.pack_into(">f", fog_table_data, 0x0C, fog_props.fogEnd)
+			struct.pack_into(">BBBB", fog_table_data, 0x10, int(fog_props.fogColor[0] * 255), int(fog_props.fogColor[1] * 255), int(fog_props.fogColor[2] * 255), int(fog_props.fogColor[3]) * 255)
+
+		else:
+			print("\n\n[WARNING]: FAILED TO GRAB FOG_TABLE. EXPORTING EMPTY\n\n")
+			struct.pack_into(">L", fog_table_data, 0x00, 0) # Fog enabled
+			struct.pack_into(">L", fog_table_data, 0x04, 0) # Fog mode
+			struct.pack_into(">f", fog_table_data, 0x08, 0) # Fog start
+			struct.pack_into(">f", fog_table_data, 0x0c, 1000) # Fog end
+			struct.pack_into(">L", fog_table_data, 0x10, 0x000000FF) # Fog color
 		linker.add_blob(fog_table_blob_name, fog_table_data)
 		linker.place_blob_in_section(fog_table_blob_name, "fog_table")
 
