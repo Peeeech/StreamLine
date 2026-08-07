@@ -1,4 +1,4 @@
-
+#sys imports
 import bpy  # type: ignore
 import os
 import shutil
@@ -6,6 +6,16 @@ import sys
 import importlib.util
 import subprocess
 
+""" resolve PIL failing to show up from local install """
+import site
+
+user_site = site.getusersitepackages()
+
+if user_site not in sys.path:
+    sys.path.append(user_site)
+
+
+# main imports
 from . import pydmd
 from .parsers import tplparse as ptpl
 from .parsers import camparse as pcam

@@ -1,6 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright 2019 Linus S. (aka PistonMiner)
 
+""" resolve PIL failing to show up from local install """
+import sys
+import site
+
+user_site = site.getusersitepackages()
+
+if user_site not in sys.path:
+    sys.path.append(user_site)
+
 import bpy #type: ignore
 from bpy.props import ( #type: ignore
 	StringProperty,
