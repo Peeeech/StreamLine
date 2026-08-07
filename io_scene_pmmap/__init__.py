@@ -5,6 +5,9 @@ import shutil
 import sys
 import importlib.util
 import subprocess
+from pathlib import Path
+import tempfile
+
 
 """ resolve PIL failing to show up from local install """
 import site
@@ -34,6 +37,8 @@ from .blender.ui import worldPanel as panel
 from .blender.ui import workspace
 from .blender.ui.helpers import cameraRaycast
 
+
+#WIP custom rendering lib layer
 #from .render import flattenSceneGraph
 VISUAL_MODE = False
 
@@ -44,6 +49,62 @@ def checkVisMode():
         raise Exception("[FATAL] Visual Map scene object returned none")
 
     return bpy.context.scene.visual_map
+
+
+def get_tex_dir() -> Path:
+    """
+    Return a writable texture-output directory.
+
+    Priority:
+    1. Blender's per-user data directory
+    2. Saved .blend file directory
+    3. System temporary directory
+    """
+
+    addon_name = (__package__ or "ttyd_tools").split(".")[0]
+
+    candidates: list[Path] = []
+
+    # Preferred:
+    # Windows example:
+    # C:/Users/<name>/AppData/Roaming/Blender Foundation/Blender/5.1/datafiles/...
+    user_data = bpy.utils.user_resource(
+        "DATAFILES",
+        path=f"{addon_name}/materials/tex",
+        create=True,
+    )
+
+    if user_data:
+        candidates.append(Path(user_data))
+
+    # Optional fallback beside the current .blend.
+    # bpy.data.filepath is empty when the file has never been saved.
+    if bpy.data.filepath:
+        candidates.append(
+            Path(bpy.data.filepath).resolve().parent / "tex"
+        )
+
+    # Final reliable fallback.
+    candidates.append(
+        Path(tempfile.gettempdir()) / addon_name / "materials" / "tex"
+    )
+
+    for directory in candidates:
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+
+            # Actually verify writing, rather than relying on os.access().
+            test_file = directory / ".write_test"
+            test_file.write_bytes(b"")
+            test_file.unlink()
+
+            return directory
+
+        except OSError as exc:
+            print(f"Cannot use texture directory {directory}: {exc}")
+
+    raise RuntimeError("Could not locate a writable texture directory.")
+
 
 geomDebug = True
 
@@ -222,7 +283,7 @@ class ImportBinaryFileOperator(bpy.types.Operator):
                     print(f"Error installing PIL (Pillow): {e}") 
 
             try:
-                import numpy
+                import numpy #type: ignore
             except ImportError:
                 print("NumPy is not installed. Attempting to install...")
                 try:
@@ -250,9 +311,7 @@ class ImportBinaryFileOperator(bpy.types.Operator):
                     print(f"Camera file not found at expected SPM location: {c_file}\nAborting camera import.")
                     c_file = None
                 
-            addon_dir = os.path.dirname(__file__)
-            tex_dir = os.path.join(addon_dir, "materials", "tex")
-            tex_dir = os.path.abspath(tex_dir)
+            tex_dir = get_tex_dir()
 
             #Check for/Clear out/Create "tex" directory
             if os.path.exists(tex_dir):
@@ -359,10 +418,17 @@ class ImportBinaryFileOperator(bpy.types.Operator):
                     for space in area.spaces:
                         space.shading.type = 'MATERIAL'
 
-        hitLayCol = bpy.context.view_layer.layer_collection.children['Hit']
-        hitLayCol.exclude = True
+        hideCols = ['Images', 'Materials', 'Lights', 'Hit', 'Cam', 'Unused', 'Animations']
+
+        for colName in hideCols:
+            try:
+                col = bpy.context.view_layer.layer_collection.children[colName]
+                col.exclude = True
+            except:
+                continue
 
         if checkVisMode():
+            bpy.data.collections.remove(bpy.data.collections['Hit'])
             bpy.data.collections.remove(bpy.data.collections['Cam'])
             bpy.data.collections.remove(bpy.data.collections['Unused'])
             bpy.data.collections.remove(bpy.data.collections['Lights'])
