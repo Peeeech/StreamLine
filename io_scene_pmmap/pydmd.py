@@ -1,4 +1,6 @@
 """ 
+    TODO: Update. desperately
+
     ========================================================================
     Parsing script to parse data from Paper Mario: TTYD/SPM's DMD Map files
     Based on PistonMiner's MarioST_WorldData.bt Template in 010 Editor

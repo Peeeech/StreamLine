@@ -143,10 +143,9 @@ def _extract_geom(mesh_entry: Any, debug: bool, prefix: str):
 # Blender build
 # -------------------------
 
-def _create_mesh_object(name: str, geom: Any, mesh_entry: Any, debug: bool, prefix: str, context=None):
+def _create_mesh_object(name: str, geom: Any, mesh_entry: Any,  matprefix, debug: bool, prefix: str, context=None):
     positions = geom.positions
     polys     = geom.polys
-    matprefix = context.scene.mat_prefix
 
     if not positions or not polys:
         _dbg(debug, f"{prefix}  [SKIP] empty positions/polys")
@@ -241,20 +240,21 @@ def _create_mesh_object(name: str, geom: Any, mesh_entry: Any, debug: bool, pref
     mat_name = mesh_entry.material.name
 
     if mat_name:
+        #if not checkVisMode():
+        mat_empty = bpy.data.objects.get(f"{matprefix}{mat_name}")            
+        mats_col = bpy.data.collections.get(f"{matprefix}Materials")
+
+        if (
+            not mat_empty
+            or mat_empty.type != 'EMPTY'
+            or not mats_col
+        ):
+            _dbg(debug, f"{prefix}  [WARN] material EMPTY not found in Materials collection: {mat_name!r}")
+            return obj, me, None
+
+        mat_props = mat_empty.ttyd_world_material
+
         if not checkVisMode():
-            mat_empty = bpy.data.objects.get(f"{matprefix}{mat_name}")            
-            mats_col = bpy.data.collections.get("Materials")
-
-            if (
-                not mat_empty
-                or mat_empty.type != 'EMPTY'
-                or not mats_col
-            ):
-                _dbg(debug, f"{prefix}  [WARN] material EMPTY not found in Materials collection: {mat_name!r}")
-                return obj, me, None
-
-            mat_props = mat_empty.ttyd_world_material
-
             if not mat_props.materialRefs:
                 _dbg(debug, f"{prefix}  [WARN] no material refs on EMPTY: {mat_name!r}")
                 return obj, me, mat_empty
@@ -262,8 +262,7 @@ def _create_mesh_object(name: str, geom: Any, mesh_entry: Any, debug: bool, pref
             base_mat = mat_props.materialRefs[0].material
 
         else:
-            base_mat = bpy.data.materials[f'{mat_name}']
-            mat_empty = None
+            base_mat = bpy.data.materials.get(f"{matprefix}{mat_name}")
 
         if len(me.materials) == 0:
             me.materials.append(base_mat)
@@ -275,20 +274,19 @@ def _create_mesh_object(name: str, geom: Any, mesh_entry: Any, debug: bool, pref
 
     return obj, me, mat_empty
 
-def build_geometry_from_dmd(dmd: Any, context=None, debug=None):
+def build_geometry_from_dmd(dmd: Any, matprefix, context=None, debug=None):
     """
     Safe entrypoint: pass the dmd object; we’ll auto-pick dmd.sceneGraph if present.
     """
     root = dmd.sceneGraph
-    return build_geometry_from_scenegraph(root, context=context, debug=debug)
+    return build_geometry_from_scenegraph(root, matprefix, context=context, debug=debug)
 
-def build_geometry_from_scenegraph(root_node: Any, context=None, debug=None):
+def build_geometry_from_scenegraph(root_node: Any, matprefix, context=None, debug=None):
 
     if context is None:
         context = bpy.context
 
     coll = context.scene.collection
-    matprefix = context.scene.mat_prefix
 
     stats = {
         "nodes": 0,
@@ -358,7 +356,7 @@ def build_geometry_from_scenegraph(root_node: Any, context=None, debug=None):
             geom = _extract_geom(mesh_entry, debug=debug, prefix=prefix)
             if geom is not None:
                 node_obj, mesh, mat_empty = _create_mesh_object(
-                    name, geom, mesh_entry, debug=debug, prefix=prefix, context=context
+                    name, geom, mesh_entry, matprefix, debug=debug, prefix=prefix, context=context
                 )
                 if node_obj:
                     coll.objects.link(node_obj)
@@ -479,7 +477,7 @@ def build_geometry_from_scenegraph(root_node: Any, context=None, debug=None):
 
                 part_name = f"{name}__m{mi}"
                 obj, mesh, mat_empty = _create_mesh_object(
-                    part_name, geom, mesh_entry, debug=debug, prefix=prefix, context=context
+                    part_name, geom, mesh_entry, matprefix, debug=debug, prefix=prefix, context=context
                 )
                 if obj is None:
                     stats["meshes_skipped"] += 1

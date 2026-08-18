@@ -8,6 +8,10 @@ import subprocess
 from pathlib import Path
 import tempfile
 
+"""
+TODO: Make visual import auto-append world parent folder name to names to be able to
+share world materials, as well as to avoid req. manual assignemnt
+"""
 
 """ resolve PIL failing to show up from local install """
 import site
@@ -37,7 +41,74 @@ from .blender.ui import worldPanel as panel
 from .blender.ui import workspace
 from .blender.ui.helpers import cameraRaycast
 
+
+#WIP custom rendering lib layer
 #from .render import flattenSceneGraph
+VISUAL_MODE = True
+
+def checkVisMode():
+    mode = getattr(bpy.types.Scene, "visual_map", None)
+
+    if not mode:
+        raise Exception("[FATAL] Visual Map scene object returned none")
+
+    return bpy.context.scene.visual_map
+
+
+def get_tex_dir() -> Path:
+    """
+    Return a writable texture-output directory.
+
+    Priority:
+    1. Blender's per-user data directory
+    2. Saved .blend file directory
+    3. System temporary directory
+    """
+
+    addon_name = (__package__ or "ttyd_tools").split(".")[0]
+
+    candidates: list[Path] = []
+
+    # Preferred:
+    # Windows example:
+    # C:/Users/<name>/AppData/Roaming/Blender Foundation/Blender/5.1/datafiles/...
+    user_data = bpy.utils.user_resource(
+        "DATAFILES",
+        path=f"{addon_name}/materials/tex",
+        create=True,
+    )
+
+    if user_data:
+        candidates.append(Path(user_data))
+
+    # Optional fallback beside the current .blend.
+    # bpy.data.filepath is empty when the file has never been saved.
+    if bpy.data.filepath:
+        candidates.append(
+            Path(bpy.data.filepath).resolve().parent / "tex"
+        )
+
+    # Final reliable fallback.
+    candidates.append(
+        Path(tempfile.gettempdir()) / addon_name / "materials" / "tex"
+    )
+
+    for directory in candidates:
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+
+            # Actually verify writing, rather than relying on os.access().
+            test_file = directory / ".write_test"
+            test_file.write_bytes(b"")
+            test_file.unlink()
+
+            return directory
+
+        except OSError as exc:
+            print(f"Cannot use texture directory {directory}: {exc}")
+
+    raise RuntimeError("Could not locate a writable texture directory.")
+
 
 geomDebug = True
 
@@ -105,10 +176,25 @@ class ImportBinaryFileOperator(bpy.types.Operator):
     #region: DMD Import Logic
     def import_d_file(self, context):
         """Handles the actual file import logic"""
+
+        #clear the console for debugging between import attempts
+        os.system('cls')
+
         binary_file = self.filepath
 
         # Proceed with DMD import logic...
         print(f"Importing DMD file: {binary_file}")
+
+        print(binary_file, "1")
+
+        if binary_file[-4:] == ".bin":
+            print("YAAAY")
+
+            return {'CANCELLED'}
+
+
+
+        #TODO: SPM implementation - consume .bin directly 
 
         dmd = pydmd.remoteCall(binary_file)
         if not isinstance(dmd, pydmd.DMDFile):
@@ -190,8 +276,9 @@ class ImportBinaryFileOperator(bpy.types.Operator):
             for mat in list(bpy.data.materials):
                 if mat.users == 0:
                     bpy.data.materials.remove(mat)
-            for img in list(bpy.data.images):
-                bpy.data.images.remove(img)
+            if not checkVisMode():
+                for img in list(bpy.data.images):
+                    bpy.data.images.remove(img)
 
         if bpy.context.scene.tex_import:
             try:
@@ -273,6 +360,14 @@ class ImportBinaryFileOperator(bpy.types.Operator):
 
             #Import images
             matprefix = context.scene.mat_prefix
+            #override?
+            if matprefix == "":
+                matprefix = f"{os.path.basename(os.path.dirname(binary_file))}_"
+            elif matprefix[-1:] != "_":
+                matprefix = f"{matprefix}_"
+
+            if not checkVisMode():
+                matprefix = ""
 
             print(f"\nImporting images from: {tex_dir}\n")
             for fname in os.listdir(tex_dir):
@@ -301,13 +396,14 @@ class ImportBinaryFileOperator(bpy.types.Operator):
                 fProps.fogColor = (fData.fogColor.r / 255, fData.fogColor.g / 255, fData.fogColor.b / 255, fData.fogColor.a / 255)
 
             #Create imageEmpties
-            print(f"\nCreating images (empty containers) with tpl data\n")
-            images = txImg.build_images_from_scene(images, tex_list, context)
+            if not checkVisMode():
+                print(f"\nCreating images (empty containers) with tpl data\n")
+                images = txImg.build_images_from_scene(images, tex_list, context)
 
             #Create materialEmpties
             print(f"\nCreating materials (empty containers) with image data\n")
             matData = dmd.data.materialData
-            materials = txMat.build_materials_from_scene(matData, tex_list, context)
+            materials = txMat.build_materials_from_scene(matData, tex_list, matprefix, context)
 
             for window in bpy.context.window_manager.windows:
                 for area in window.screen.areas:
@@ -319,7 +415,7 @@ class ImportBinaryFileOperator(bpy.types.Operator):
 
             #Create geometry
             global geomDebug
-            geometries.build_geometry_from_dmd(dmd, context, geomDebug)
+            geometries.build_geometry_from_dmd(dmd, matprefix, context, geomDebug)
 
             #Create lights
             if not checkVisMode():
@@ -345,16 +441,45 @@ class ImportBinaryFileOperator(bpy.types.Operator):
 
         for colName in hideCols:
             try:
-                col = bpy.context.view_layer.layer_collection.children[colName]
+                col = bpy.context.view_layer.layer_collection.children[f'{matprefix}{colName}']
                 col.exclude = True
             except:
                 continue
 
         if checkVisMode():
-            bpy.data.collections.remove(bpy.data.collections['Hit'])
-            bpy.data.collections.remove(bpy.data.collections['Cam'])
-            bpy.data.collections.remove(bpy.data.collections['Unused'])
-            bpy.data.collections.remove(bpy.data.collections['Lights'])
+            #bpy.data.collections.remove(bpy.data.collections[f'{matprefix}Hit'])
+            bpy.data.collections.remove(bpy.data.collections[f'{matprefix}Cam'])
+            bpy.data.collections.remove(bpy.data.collections[f'{matprefix}Unused'])
+            bpy.data.collections.remove(bpy.data.collections[f'{matprefix}Lights'])
+
+            colName = matprefix[:-1]
+            colParent = bpy.data.collections.new(colName)
+            
+            scene = bpy.context.scene
+            master = scene.collection
+            master.children.link(colParent)
+
+            colToSkip = []
+
+            for col in bpy.data.collections:
+                if col == colParent:
+                    continue
+
+                #skip if first child is a collection; should only happen for this grouping? crass
+                if len(col.children) > 0 and col.children[0].id_type == 'COLLECTION':
+                    for child in col.children:
+                        colToSkip.append(child)
+                    continue
+
+                if col in colToSkip:
+                    continue
+
+                prefixLen = len(matprefix) - 1
+                print(col.name[:prefixLen], colName)
+                assert col.name[:prefixLen] == colName, "collection name should match prefix"
+
+                master.children.unlink(col)
+                colParent.children.link(col)
 
         return {'FINISHED'}
     
@@ -443,25 +568,27 @@ def register():
     bpy.types.Material.meshReferences = bpy.props.PointerProperty(type=panel.TTYDMaterialProperties)
     
     # Custom import settings
+    bpy.types.Scene.visual_map = bpy.props.BoolProperty(name="Purely Visual Map Geometry", description="Strips custom properties and Local IRs for purely visual map", default=VISUAL_MODE)
+
     bpy.types.Scene.tex_import = bpy.props.BoolProperty(name="Import Textures", description="Pulls 't' file from same directory to create textures for materials", default=True)  # type: ignore
     bpy.types.Scene.orph_mat_clear = bpy.props.BoolProperty(name="Delete Materials", description="Deletes existing material data in the blender file", default=True)  # type: ignore
-    bpy.types.Scene.mat_prefix = bpy.props.StringProperty(name="Only use for previewing reasons to avoid material overlap. They will break roundtrip logic if not replacing TPL.", default="") #type: ignore
+    bpy.types.Scene.mat_prefix = bpy.props.StringProperty(name="deprecated.", description="Only use for previewing reasons to avoid material overlap. They will break roundtrip logic if not replacing TPL.", default="") #type: ignore
 
     # Add the import option to the File > Import menu
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     
     # External registers
-    workspace.register()
-    cameraRaycast.register()
+    #workspace.register()
+    #cameraRaycast.register()
 
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
-    workspace.unregister()
-    cameraRaycast.unregister()
+    #workspace.unregister()
+    #cameraRaycast.unregister()
 
     objattributes = ["ttyd_world_mesh", "ttyd_world_empty", "ttyd_world_light", "ttyd_world_material",]
-    sceneattributes = ["mat_prefix", "orph_mat_clear", "tex_import",]
+    sceneattributes = ["visual_map", "mat_prefix", "orph_mat_clear", "tex_import",]
 
     for attr in objattributes:
         if hasattr(bpy.types.Object, attr):

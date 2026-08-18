@@ -42,32 +42,32 @@ def detach_children_keep_world(parent_obj):
         k.matrix_world = mw
     return kids
 
-def create_and_setup_collections(direct_children):
+def create_and_setup_collections(direct_children, matprefix):
     scene = bpy.context.scene
     master = scene.collection
 
-    map_col = bpy.data.collections.get("Map")
-    hit_col = bpy.data.collections.get("Hit")
-    cam_col = bpy.data.collections.get("Cam")
-    unused  = bpy.data.collections.get("Unused")
-    light_col = bpy.data.collections.get("Lights")
+    map_col = bpy.data.collections.get(f"{matprefix}Map")
+    hit_col = bpy.data.collections.get(f"{matprefix}Hit")
+    cam_col = bpy.data.collections.get(f"{matprefix}Cam")
+    unused  = bpy.data.collections.get(f"{matprefix}Unused")
+    light_col = bpy.data.collections.get(f"{matprefix}Lights")
 
     U = None
 
     if map_col == None:
-        map_col = bpy.data.collections.new("Map")
+        map_col = bpy.data.collections.new(f"{matprefix}Map")
         master.children.link(map_col)
     if hit_col == None:
-        hit_col = bpy.data.collections.new("Hit")
+        hit_col = bpy.data.collections.new(f"{matprefix}Hit")
         master.children.link(hit_col)
     if cam_col == None:
-        cam_col = bpy.data.collections.new("Cam")
+        cam_col = bpy.data.collections.new(f"{matprefix}Cam")
         master.children.link(cam_col)
     if unused == None:
-        unused = bpy.data.collections.new("Unused")
+        unused = bpy.data.collections.new(f"{matprefix}Unused")
         master.children.link(unused)
     if light_col == None:
-        light_col = bpy.data.collections.new("Lights")
+        light_col = bpy.data.collections.new(f"{matprefix}Lights")
         master.children.link(light_col)
 
 
@@ -133,6 +133,16 @@ def apply_axis_from_snapshot(objs, C, world_snapshot):
         Mw_old = world_snapshot[o]
         o.matrix_world = C @ Mw_old
 
+
+def checkVisMode():
+    mode = getattr(bpy.types.Scene, "visual_map", None)
+
+    if not mode:
+        raise Exception("[FATAL] Visual Map scene object returned none")
+
+    return bpy.context.scene.visual_map
+
+
 def main(matprefix=""):
     # Get the world_root object.
     world_root = bpy.context.scene.objects.get(f"{matprefix}world_root")
@@ -153,7 +163,7 @@ def main(matprefix=""):
     bpy.data.objects.remove(world_root, do_unlink=True)
 
     # Create collections and move hierarchies based solely on the first letter of the direct children's names.
-    create_and_setup_collections(direct_children)
+    create_and_setup_collections(direct_children, matprefix)
 
     FLIP = Matrix.Scale(-1, 4, (1, 0, 0))
 
@@ -174,4 +184,8 @@ def main(matprefix=""):
         child.matrix_world = M_new
 
     # Manual mass re-sync
-    shared.sync_UI_state(None)
+    if not checkVisMode():
+        shared.sync_UI_state(None)
+
+    else:
+        bpy.ops.file.pack_all()
