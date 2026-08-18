@@ -1,12 +1,11 @@
 import struct
 import os
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 try:
-    from ..classes import tplH
-except:
-    from classes import tplH
-
+    from . import tplH
+except ImportError:
+    import tplH
 
 # ------------------------------------------------------------
 # Constants
@@ -160,3 +159,27 @@ def parse_tpl(path: str) -> Tuple[tplH.TPLHeader, List[tplH.TPLImage]]:
             )
 
         return header, images
+    
+if __name__ == "__main__":
+    import sys
+    import os
+
+    try:
+        path = sys.argv[1]
+    except Exception:
+        path = None
+
+    if path is None or (sys.argv.__len__() < 2):
+        print(f"Usage: `py [filepath]`")
+        sys.exit(0)
+
+    if not os.path.isfile(os.path.abspath(path)):
+        print(f"Pointed at `{os.path.abspath(path)}` -- not a valid file")
+        sys.exit(0)
+
+    header, images = parse_tpl(path)
+
+    from pprint import pprint
+
+    pprint(header)
+    pprint(images)

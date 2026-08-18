@@ -2,6 +2,7 @@ import bpy #type: ignore
 import math
 from mathutils import Matrix #type: ignore
 from bpy_extras.io_utils import axis_conversion #type: ignore
+from .ui.panels import shared
 
 C = axis_conversion(
         from_forward='-Z', from_up='Y',
@@ -45,16 +46,30 @@ def create_and_setup_collections(direct_children):
     scene = bpy.context.scene
     master = scene.collection
 
-    map_col = bpy.data.collections.new("Map")
-    hit_col = bpy.data.collections.new("Hit")
-    cam_col = bpy.data.collections.new("Cam")
-    unused  = bpy.data.collections.new("Unused")
+    map_col = bpy.data.collections.get("Map")
+    hit_col = bpy.data.collections.get("Hit")
+    cam_col = bpy.data.collections.get("Cam")
+    unused  = bpy.data.collections.get("Unused")
     light_col = bpy.data.collections.get("Lights")
 
-    master.children.link(map_col)
-    master.children.link(hit_col)
-    master.children.link(cam_col)
-    master.children.link(unused)
+    U = None
+
+    if map_col == None:
+        map_col = bpy.data.collections.new("Map")
+        master.children.link(map_col)
+    if hit_col == None:
+        hit_col = bpy.data.collections.new("Hit")
+        master.children.link(hit_col)
+    if cam_col == None:
+        cam_col = bpy.data.collections.new("Cam")
+        master.children.link(cam_col)
+    if unused == None:
+        unused = bpy.data.collections.new("Unused")
+        master.children.link(unused)
+    if light_col == None:
+        light_col = bpy.data.collections.new("Lights")
+        master.children.link(light_col)
+
 
     world_snap = snapshot_world(direct_children)
     unused_objs = []
@@ -65,11 +80,22 @@ def create_and_setup_collections(direct_children):
             add_object_hierarchy_to_collection(obj, cam_col)
 
     for wrapper in direct_children:
+        """
+        TODO: Use raw pointer to S and A roots to ensure correctness. this is crass
+        """
+
         name = wrapper.name or ""
         first = name[0].upper() if name else ""
         last  = name[-1].upper() if name else ""
 
-        if (first == "S") or (last == "S"):
+        # catch case for certain maps with prefixes; i.e. "stg_S" and "stg_A" should still go to map and hit respectively
+        if first == "S" and last == "S":
+            target = map_col
+        elif first == "S" and last == "A":
+            target = hit_col
+
+        # regular or check
+        elif (first == "S") or (last == "S"):
             target = map_col
         elif (first == "A") or (last == "A"):
             target = hit_col
@@ -87,8 +113,6 @@ def create_and_setup_collections(direct_children):
 
         # Optional: force depsgraph update if you’re immediately reading properties
         bpy.context.view_layer.update()
-
-    U = None
 
     for obj in unused_objs:
         obj.parent = U
@@ -117,10 +141,10 @@ def main(matprefix=""):
         return
     
     direct_children = list(world_root.children)
-    original_pos = []
+    original = []
     
     for i, child in enumerate(direct_children):
-        original_pos.append((child.location.copy()))
+        original.append(((child.location.copy()), (child.rotation_euler.copy())))
 
     # Capture a list of world_root's direct children.
     detach_children_keep_world(world_root)
@@ -131,11 +155,23 @@ def main(matprefix=""):
     # Create collections and move hierarchies based solely on the first letter of the direct children's names.
     create_and_setup_collections(direct_children)
 
+    FLIP = Matrix.Scale(-1, 4, (1, 0, 0))
+
     for i, child in enumerate(direct_children):
-        name = child.name or ""
-        first = name[0].upper() if name else ""
-        last  = name[-1].upper() if name else ""
-        if (first == "S") or (last == "S") or (first == "A") or (last == "A"):
-            child.location = (original_pos[i][0], original_pos[i][2], original_pos[i][1])
-        else:
-            child.location = (original_pos[i][0], original_pos[i][1], original_pos[i][2])
+        loc, rot = original[i]
+
+        # rebuild original matrix (THIS is key)
+        M_old = Matrix.LocRotScale(loc, rot, None)
+
+        # apply axis conversion
+        M_new = C @ M_old
+
+        # fix handedness
+        if M_new.to_3x3().determinant() < 0:
+            M_new = M_new @ FLIP
+
+        # apply
+        child.matrix_world = M_new
+
+    # Manual mass re-sync
+    shared.sync_UI_state(None)

@@ -36,10 +36,10 @@ class animationTable:
 @dataclass
 class jointTransformAnimationTableTrack:
     target_name: str
-    anim_origin: list   #list of 3 'TangentXY' objects (One for each Axis)
-    anim_rotation: list #^^^^^
-    anim_scale: list    #^^^^^
-    obj_pos_delta: list 
+    anim_origin: t.XYZ
+    anim_rotation: t.XYZ
+    anim_scale: t.XYZ
+    obj_pos_delta: t.XYZ 
     unk_34: bytes 
     unk_40: bytes 
     unk_4c: bytes 
@@ -63,12 +63,6 @@ class materialUvAnimationTableTrack:
     keyframeCount: int
     keyframes: list #list, populated with respective 'keyframe' objects
 
-    def __repr__(self):
-        return (
-            f"<MaterialUVTrack '{self.target_name}' sampler={self.samplerIndex} "
-            f"({self.keyframeCount} keyframes)>"
-        )
-
 @dataclass
 class materialBlendAlphaAnimationTableTrack:
     material_name: str
@@ -91,20 +85,13 @@ class lightParameterAnimationTableTrack:
     keyframeCount: int
     keyframes: list #list, populated with respective 'keyframe' objects
 
-    def __repr__(self):
-        col = ", ".join(f"{c.value:.3f}" for c in self.color)
-        return (
-            f"<LightParamKeyframe t={self.time:.2f}s "
-            f"color=[{col}] spot={self.spotAngle.value:.3f} attn={self.angularAttenuation.value:.3f}>"
-        )
-
     #----------- keyframe objects:
 @dataclass
 class jointTransformAnimationKeyframe:
     time: float
-    translation: t.XYZ
-    rotation: t.XYZ
-    scale: t.XYZ
+    translation: list[t.TangentXY]
+    rotation: list[t.TangentXY]
+    scale: list[t.TangentXY]
     unk_b8: bytes
     unk_f4: bytes
     unk_130: bytes
@@ -127,9 +114,9 @@ class materialBlendAlphaAnimationKeyframe:
 @dataclass
 class lightTransformAnimationKeyframe:
     time: float
-    translation: t.XYZ
-    rotation: t.XYZ
-    scale: t.XYZ
+    translation: list[t.TangentXY]
+    rotation: list[t.TangentXY]
+    scale: list[t.TangentXY]
 
 @dataclass
 class lightParameterAnimationKeyframe:

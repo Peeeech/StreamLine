@@ -34,7 +34,7 @@ class Sampler:
     unk_04: bytes
     wrapS: int
     wrapT: int
-    unk_0a: bytes
+    texBlendMode: int
     unk_0b: bytes
     texture: Texture
 

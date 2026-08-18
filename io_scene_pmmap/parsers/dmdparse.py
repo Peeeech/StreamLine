@@ -4,7 +4,7 @@ import numpy as np
 import pprint
 import os
 import traceback
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 try:
     from ..classes import tableClasses as mainH, animationH as animH, objectsH as objH, materialH as matH, tuplesH as triH
@@ -16,7 +16,7 @@ except ImportError:
 class PreservedPrimative:
     opcode: int
     vertexCount: int
-    pos_indices: list[int]
+    pos_indices: List[int]
 
 DEBUG_VCD = False  # flip off when done
 
@@ -166,7 +166,7 @@ def table(f, table_count):
 def animation_table(f, offs, tables):
     anim_table = tables["animation_table"]
     if anim_table is None:
-        return None  # or [], or just skip animation parsing
+        raise Exception("[dmdparse.py]: anim_table == None")
     animAddr = anim_table.address
     f.seek(offs +animAddr)
     count = r_u32(f)
@@ -291,7 +291,7 @@ def _read_counted_block(f, base_off: int, block_off: int, elem_fmt: str):
     Reads a block stored as:
         u32 count
         count * struct(elem_fmt)
-    Returns list[tuple].
+    Returns List[tuple].
     """
     if not block_off:
         return None
@@ -463,10 +463,10 @@ def vcdData(f, fileName, offs, tables, versionString: str | None = None):
             colors    = np.zeros((0, 4), dtype=np.uint8)
             uvs       = np.zeros((0, 2), dtype=np.int16)
 
-            positionData = mainH.VCDDataNP(0, positions)
-            normalData   = mainH.VCDDataNP(0, normals)
-            colorData    = mainH.VCDDataNP(0, colors)
-            textureCoordinateData = mainH.VCDDataNP(0, uvs)
+            positionData: mainH.VCDDataNP | None = mainH.VCDDataNP(0, positions)
+            normalData: mainH.VCDDataNP | None = mainH.VCDDataNP(0, normals)
+            colorData: mainH.VCDDataNP | None = mainH.VCDDataNP(0, colors)
+            textureCoordinateData: mainH.VCDDataNPList | None = mainH.VCDDataNPList(0, [uvs])
 
         else:
             # Positions
@@ -541,7 +541,7 @@ def vcdData(f, fileName, offs, tables, versionString: str | None = None):
                 buf = f.read(num_vals * 2) #2 bytes per var
                 textureCoordinates.append(np.frombuffer(buf, dtype=">i2").astype(np.int16).reshape((txCCount, 2)))
 
-            textureCoordinateData = mainH.VCDData(texCoordsUsed, textureCoordinates)
+            textureCoordinateData = mainH.VCDDataNPList(texCoordsUsed, textureCoordinates)
     except:
         print("awe man")
     """
@@ -565,7 +565,7 @@ def vcdData(f, fileName, offs, tables, versionString: str | None = None):
         rotation = triH.XYZ(*(struct.unpack(">3f", f.read(12))))
         scale = triH.XYZ(*(struct.unpack(">3f", f.read(12))))
         color = triH.ColorRGBA(*(f.read(4)))
-        print(color)
+        #print(color)
         spotAngleFullDegrees = r_f32(f)
         angularAttenuation = r_f32(f)
         distanceAttenuationType = r_u32(f)
@@ -652,7 +652,7 @@ def vcdData(f, fileName, offs, tables, versionString: str | None = None):
                 for k in range(keyframeCount):      #Keyframe setup
                     time = r_f32(f)
 
-                    translation = [triH.TangentXY(*struct.unpack(">4fI", f.read(20))) for _ in range(3)]                
+                    translation = [triH.TangentXY(*struct.unpack(">4fI", f.read(20))) for _ in range(3)]
                     rotation = [triH.TangentXY(*struct.unpack(">4fI", f.read(20))) for _ in range(3)]
                     scale = [triH.TangentXY(*struct.unpack(">4fI", f.read(20))) for _ in range(3)]
 
@@ -850,7 +850,7 @@ def vcdData(f, fileName, offs, tables, versionString: str | None = None):
                 textureOffset = r_u32(f)
                 unk_04 = f.read(4)
                 wrapS, wrapT = struct.unpack(">2B", f.read(2))
-                unk_0a = r_1b(f) #Materials can't be transparent without this != 0. unsure of dif b/w 1/2
+                texBlendMode = r_1b(f) #Both this and material->blendMode need to be != 0 for transparency
                 unk_0b = r_1b(f)
 
                 f.seek(offs + textureOffset)
@@ -863,7 +863,7 @@ def vcdData(f, fileName, offs, tables, versionString: str | None = None):
                 unk_0c = f.read(4)
                 texture = matH.Texture(texName, render_order, unk_05, unk_06, unk_07, wWidth, wHeight, unk_0c)
 
-                textureSamplers.append(matH.Sampler(textureOffset, unk_04, wrapS, wrapT, unk_0a, unk_0b, texture))
+                textureSamplers.append(matH.Sampler(textureOffset, unk_04, wrapS, wrapT, texBlendMode, unk_0b, texture))
             else:
                 textureSamplers.append(None)  
         f.seek(offs + pTevConfig)
@@ -1028,11 +1028,11 @@ def _read_mesh_bits_if_any(f, base_off, node_off, info, data, tables, versionStr
 
 @dataclass(frozen=True)
 class LocalVertex:
-    pos: Tuple[float, float, float]
-    nrm: Tuple[float, float, float] | None
-    uv0: Tuple[float, float] | None
-    uv1: Tuple[float, float] | None
-    col: Tuple[int, int, int, int] | None
+    pos: tuple[float, float, float]
+    nrm: tuple[float, float, float] | None
+    uv0: tuple[float, float] | None
+    uv1: tuple[float, float] | None
+    col: tuple[int, int, int, int] | None
     
 @dataclass
 class LocalPrimitive:
@@ -1041,12 +1041,12 @@ class LocalPrimitive:
 
 @dataclass
 class LocalMeshIR:
-    positions: list[tuple[float, float, float]]
-    normals:   list[tuple[float, float, float] | None]
-    colors:    list[tuple[int, int, int, int] | None]
-    uv0s:      list[tuple[float, float] | None]
-    uv1s:      list[tuple[float, float] | None]
-    primitives: list[LocalPrimitive]
+    positions:  List[tuple[float, float, float]] | None
+    normals:    List[tuple[float, float, float]] | None
+    colors:     List[tuple[float, float, float, float]] | None
+    uv0s:       List[tuple[float, float]] | None
+    uv1s:       List[tuple[float, float]] | None
+    primitives: List[LocalPrimitive]
 
 def build_local_mesh_ir(geom, eps=1e-6) -> LocalMeshIR:
     def q3(v):
@@ -1059,8 +1059,14 @@ def build_local_mesh_ir(geom, eps=1e-6) -> LocalMeshIR:
         if c is None:
             return None
         # c is (0..1 floats) from prim_colors in your map func
-        return tuple(int(round(max(0.0, min(1.0, x)) * 255.0)) for x in c)
 
+        r = int(round(max(0.0, min(1.0, c[0])) * 255.0))
+        g = int(round(max(0.0, min(1.0, c[1])) * 255.0))
+        b = int(round(max(0.0, min(1.0, c[2])) * 255.0))
+        a = int(round(max(0.0, min(1.0, c[3])) * 255.0))
+
+        return (r, g, b, a)
+    
     # IMPORTANT: use primitive streams
     src_pos = geom.prim_positions
     src_nrm = getattr(geom, "prim_normals", None)
@@ -1069,11 +1075,27 @@ def build_local_mesh_ir(geom, eps=1e-6) -> LocalMeshIR:
     src_col = getattr(geom, "prim_colors", None)
 
     expected = sum(int(p.vertexCount) for p in geom.preserved_primitives)
-    if expected != len(src_pos):
-        raise RuntimeError(
-            f"[LocalIR] Loop cursor mismatch: sum(prim vertexCount)={expected} "
-            f"but len(prim_positions)={len(src_pos)}"
-        )
+
+    def require_stream_len(name: str, stream):
+        if stream is None:
+            return
+
+        if len(stream) != expected:
+            raise RuntimeError(
+                f"[LocalIR] Primitive stream length mismatch for {name}: "
+                f"expected={expected} from preserved_primitives, "
+                f"actual={len(stream)}, "
+                f"len(prim_positions)={len(src_pos) if src_pos is not None else 'None'}"
+            )
+
+    if src_pos is None:
+        raise RuntimeError("[LocalIR] geom.prim_positions is None")
+
+    require_stream_len("prim_positions", src_pos)
+    require_stream_len("prim_normals", src_nrm)
+    require_stream_len("prim_colors", src_col)
+    require_stream_len("prim_uvs0", src_uv0)
+    require_stream_len("prim_uvs1", src_uv1)
 
     vertex_map: dict[LocalVertex, int] = {}
     positions, normals, colors, uv0s, uv1s = [], [], [], [], []
@@ -1095,6 +1117,10 @@ def build_local_mesh_ir(geom, eps=1e-6) -> LocalMeshIR:
             col = src_col[loop_cursor] if src_col is not None else None
             uv0 = src_uv0[loop_cursor] if src_uv0 is not None else None
             uv1 = src_uv1[loop_cursor] if src_uv1 is not None else None
+
+            """
+            This is where colors are de-normalized and rounded to 0-255
+            """
 
             key = LocalVertex(
                 pos=q3(pos),
@@ -1180,7 +1206,13 @@ def map_vcd_table_and_triangulate(mesh, data, vcd_table=None,
                                  vertex_src: mainH.VertexSource | None = None,
                                  debug=False):
     # ---------------- Determine element usage early ----------------
-    uses_tex1 = bool(getattr(mesh, "elementMask", 0) & VCD_TEX1)
+    mask = int(getattr(mesh, "elementMask", 0))
+
+    uses_pos  = bool(mask & VCD_POS)
+    uses_nrm  = bool(mask & VCD_NRM)
+    uses_col0 = bool(mask & VCD_CLR0)
+    uses_tex0 = bool(mask & VCD_TEX0)
+    uses_tex1 = bool(mask & VCD_TEX1)
 
     # ---------------- Pick sources ----------------
     if vertex_src is not None:
@@ -1307,10 +1339,10 @@ def map_vcd_table_and_triangulate(mesh, data, vcd_table=None,
 
     # ---------------- LocalIR primitive-order streams ----------------
     prim_positions: list[tuple[float, float, float]] = []
-    prim_normals:   list[tuple[float, float, float] | None] = []
-    prim_uvs0:      list[tuple[float, float] | None] = []
+    prim_normals:   list[tuple[float, float, float] | None] | None = [] if uses_nrm else None
+    prim_uvs0:      list[tuple[float, float] | None] | None = [] if uses_tex0 else None
     prim_uvs1:      list[tuple[float, float] | None] | None = [] if uses_tex1 else None
-    prim_colors:    list[tuple[float, float, float, float] | None] = []
+    prim_colors:    list[tuple[float, float, float, float] | None] | None = [] if uses_col0 else None
 
     # ---------------- Resolve per-polygon vertices ----------------
     mapped_tris = []
@@ -1331,7 +1363,7 @@ def map_vcd_table_and_triangulate(mesh, data, vcd_table=None,
             )
         )
 
-        resolved: list[objH.ResolvedVertex] = []
+        resolved: List[objH.ResolvedVertex] = []
 
         for v in poly.vertices:
             if pos_arr is None:
@@ -1371,11 +1403,18 @@ def map_vcd_table_and_triangulate(mesh, data, vcd_table=None,
 
             # Primitive stream append MUST be in poly.vertex order
             prim_positions.append(pos)
-            prim_normals.append(nrm)
-            prim_uvs0.append(uv0)
-            if uses_tex1 and prim_uvs1 is not None:
+
+            if prim_normals is not None:
+                prim_normals.append(nrm)
+
+            if prim_uvs0 is not None:
+                prim_uvs0.append(uv0)
+
+            if prim_uvs1 is not None:
                 prim_uvs1.append(uv1)
-            prim_colors.append(clr)
+
+            if prim_colors is not None:
+                prim_colors.append(clr)
 
         tris = triangulate_resolved_vertices(int(poly.drawOpcode), resolved)
         if tris:
@@ -1388,14 +1427,14 @@ def map_vcd_table_and_triangulate(mesh, data, vcd_table=None,
     # ---------------- Flatten to Blender-ready loop buffers ----------------
     positions: list[tuple[float, float, float]] = []
     normals:   list[tuple[float, float, float] | None] = []
-    uvs0_list:  list[tuple[float, float] | None] = []
-    uvs1_list:  list[tuple[float, float] | None] = [] if uses_tex1 else None
+    uvs0_list: list[tuple[float, float] | None] = []
+    uvs1_list: list[tuple[float, float] | None] | None = [] if uses_tex1 else None
     colors:    list[tuple[float, float, float, float] | None] = []
     polys:     list[tuple[int, int]] = []
+    flat_pi:   list[int] = []
 
     has_real_uv1 = False
     loop_index = 0
-    flat_pi: list[int] = []
 
     for tris in mapped_tris:
         for tri in tris:
@@ -1410,7 +1449,8 @@ def map_vcd_table_and_triangulate(mesh, data, vcd_table=None,
                     uv1 = rv.uvs1
                     if uv1 is not None:
                         has_real_uv1 = True
-                    uvs1_list.append(uv1)
+                    if uvs1_list is not None:
+                        uvs1_list.append(uv1)
 
                 colors.append(rv.clr)
                 loop_index += 1
@@ -1431,7 +1471,6 @@ def map_vcd_table_and_triangulate(mesh, data, vcd_table=None,
         preserved_primitives=preserved_primitives,
         flat_pi=flat_pi,
 
-        # ADD THESE:
         prim_positions=prim_positions,
         prim_normals=prim_normals,
         prim_uvs0=prim_uvs0,
@@ -1622,7 +1661,21 @@ def _read_node_recursive(f, fileName, base_off, node_off, data, tables, versionS
 
     return node
 
-def sceneGraph(f, fileName, offs, tables, data, versionString: str | None = None):
+def sceneGraph(f, fileName, offs, tables, data, versionString: str | None = None) -> mainH.childNull:
     root_off = tables["information"].data.sceneGraphRootOffset
     root = _read_node_recursive(f, fileName, offs, root_off, data, tables, versionString=versionString)
+    
+    if root is None:
+        raise RuntimeError(
+            f"[sceneGraph] Root node is None "
+            f"(file={fileName}, rootOff={hex(int(root_off))})"
+        )
+
+    if not isinstance(root, mainH.childNull):
+        raise TypeError(
+            f"[sceneGraph] Expected sceneGraph root to be childNull, "
+            f"got {type(root).__name__} "
+            f"(file={fileName}, rootOff={hex(int(root_off))})"
+        )
+
     return root

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Any, Tuple, List
+from typing import Optional, Any
 import numpy as np
 
 try:
@@ -56,13 +56,6 @@ class Animation:
     #TODO: materialBlendAlphaAnimationTable:
     lightTransformAnimationTable: Optional[a.animationTable] = None    #^^^^^
     lightParameterAnimationTable: Optional[a.animationTable] = None    #^^^^^
-
-    def __repr__(self):
-        lines = [f"\n<AnimationTable entries={self.entryCount}>"]
-        for i, (off, track) in enumerate(zip(self.entryOffsets, self.tracks)):
-            name = getattr(track, "target_name", None) or getattr(track, "light_name", None) or "???"
-            lines.append(f"  [{i}] offset={hex(off):<10} track={name}\n")
-        return "\n".join(lines) + "─" * 60 + "\n"
     
 @dataclass
 class Material:
@@ -81,35 +74,37 @@ class Material:
     tevConfig: m.TEV
 
 @dataclass
+class FlatGeometry:
+    positions: list[tuple[float, float, float]] | None
+    normals:   list[tuple[float, float, float] | None] | None
+    uvs0:      list[tuple[float, float] | None] | None
+    uvs1:      list[tuple[float, float] | None] | None
+    colors:    list[tuple[float, float, float, float] | None] | None
+
+    polys:     list[tuple[int, int]]
+    preserved_primitives: list[Any]
+    flat_pi:   list[int]
+
+    prim_positions: list[tuple[float, float, float]] | None
+    prim_normals:   list[tuple[float, float, float] | None] | None
+    prim_uvs0:      list[tuple[float, float] | None] | None
+    prim_uvs1:      list[tuple[float, float] | None] | None
+    prim_colors:    list[tuple[float, float, float, float] | None] | None
+
+@dataclass
+class ResolvedVertex:
+    pi: int
+    pos: tuple[float, float, float]
+    nrm: tuple[float, float, float] | None
+    clr: tuple[float, float, float, float] | None
+    uvs0: tuple[float, float] | None
+    uvs1: tuple[float, float] | None
+
+@dataclass
 class MeshEntry:
     meshOffset: int
     material: Any
     mesh_header: Any
     vcd_table: int
-    polygons: dict
+    polygons: FlatGeometry
     local_ir: Any
-
-@dataclass
-class ResolvedVertex:
-    pi: int
-    pos: Tuple[float, float, float]
-    nrm: Tuple[float, float, float]
-    clr: Optional[Tuple[int, int, int, int]]
-    uvs0: Optional[Tuple[float, float]]
-    uvs1: Optional[Tuple[float, float]]
-
-@dataclass
-class FlatGeometry:
-    positions: List[Tuple[float, float, float]]
-    normals:   List[Optional[Tuple[float, float, float]]]
-    uvs0:       List[Optional[Tuple[float, float]]]
-    uvs1:       List[Optional[Tuple[float, float]]]
-    colors:    List[Optional[Tuple[float, float, float, float]]]
-    polys:     List[Tuple[int, int]]  # (start, count)
-    preserved_primitives: List[Any]
-    flat_pi:   List[int]  # Flattened position indices for all vertices
-    prim_positions: List[Tuple[float, float, float]]
-    prim_normals:   List[Optional[Tuple[float, float, float]]]
-    prim_uvs0:       List[Optional[Tuple[float, float]]]
-    prim_uvs1:       List[Optional[Tuple[float, float]]]
-    prim_colors:    List[Optional[Tuple[float, float, float, float]]]

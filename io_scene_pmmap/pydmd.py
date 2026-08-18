@@ -180,25 +180,87 @@ import argparse
 try:
     # Try relative import (when running as part of package)
     from .parsers import dmdparse as parseMain
+    from .classes import tableClasses as mainH, animationH as animH, objectsH as objH, materialH as matH, tuplesH as triH
 except ImportError:
     # Fallback to absolute import (when run standalone)
     from parsers import dmdparse as parseMain
     
 class DMDFile:
+    """
+    Parsed DMD container.
+
+    This class intentionally separates three concepts:
+
+    1. Raw parsed table data
+        Direct binary/table-level data read from the DMD.
+
+    2. Expanded sceneGraph
+        Python-side reconstruction of the DMD node graph. This is the main
+        semantic representation used by the importer/exporter.
+
+    3. Built backend collections
+        Convenience/cache arrays filled after parsing. These are not the source
+        parse itself; they are derived indexes/views used by later backends.
+
+        Examples:
+            self.textures
+            self.materials
+            self.joints
+
+        These are intentionally initialized in __init__ but populated during a
+        later build/compile step so import can branch cleanly into:
+            - Blender backend construction
+            - Render backend blob compilation
+    """
     def __init__(self):
-        self.header = None
-        self.info = None
+        # Core parsed file state.
+        self.header: parseMain.DMDHeader
+        self.info:   parseMain.DMDInfo
+        self.data:   mainH.sceneData
+        self.tables: mainH.DMDTables
+        self.offsetTable: mainH.OffsetTable
+        self.sceneGraph: mainH.childNull
+
+        # Parsed top-level tables.
+        self.animation_table: mainH.OffsetTable
+        self.curve_table: mainH.OffsetTable
+        self.fog_table: mainH.FogTable
+        self.light_table: mainH.OffsetTable | None = None
+        self.material_name_table: mainH.MaterialNameTable
+        self.texture_table: mainH.TextureTable
+        self.vcd_table: mainH.VCDTable | None = None
+        
+        #placeHolder for renderer to have consistent access for storage/update on one object
+        self.renderBlob = None
+
+        # Built/compiled backend-facing collections.
+        #
+        # These are deliberately not populated by __init__.
+        # They are filled after parse(), once sceneGraph exists and object IDs,
+        # material IDs, texture IDs, etc. can be made stable.
         self.textures = []
         self.materials = []
         self.joints = []
+        self.animations = []
+        self.curves = []
+        self.fog = []
+
+        # Future render/backend cache.
+        #
+        # This can later hold packed/flattened sections derived from sceneGraph:
+        #     objBlob
+        #     matBlob
+        #     texBlob
+        #     animBlob
+        # etc.
+        self.render_compile = None
 
     def parse(self, file):
         with open(file, "rb") as f:
             self.header = parseMain.header(f)
             offs = 32
-            self.data = []
 
-            self.offsetTable = parseMain.offsetTable(f, self.header, offs)
+            self.offsetTable = parseMain.offsetTable(f, self.header, offs) #type: ignore #NOTE: Used to bump f.read() to tables start;
             self.tables = parseMain.table(f, self.header.table_count)
 
             self.animation_table = parseMain.animation_table(f, offs, self.tables)
@@ -242,8 +304,8 @@ class DMDFile:
         print(f"Texture Table: {self.texture_table}\n")
         print(f"VCD Table: {self.vcd_table}\n")
 
-        print(f"Textures: {self.texture_table.count}")
-        print(f"Materials: {self.material_name_table.count}")
+        print(f"Textures: {self.texture_table.count if self.texture_table else None}")
+        print(f"Materials: {self.material_name_table.count if self.material_name_table else None}")
         print(f"Joints: {len(self.joints)} (these aren't read yet, ignore this)")
 
             #.data contains: .[positionData, normalData, colorData, textureCoordinateData, lightData, animationData, materialData]

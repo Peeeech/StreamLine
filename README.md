@@ -1,3 +1,7 @@
+NOTE: I forgot to mention in the tutorial video, the "Only Visual" setting on Import will be lighter-weight for a more true "Map-Viewer", but won't allow exports
+
+TODO: Add SPM (.bin) interpretation
+
 # STARTUP:
 You will need to run the contents of the `blenderprep` text file within blender's `Scripting` workspace. You can copy and paste the contents directly; it will stop responding for a bit as it collects the packages, but with this method no Python installation is necessary except for what is bundled with Blender inherently. 
 

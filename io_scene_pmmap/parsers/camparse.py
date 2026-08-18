@@ -77,6 +77,12 @@ def read_cam_road_data(f):
     offsetG = r_u32(f)
     offsetH = r_u32(f)
 
+    print("Geometry count:", geometryCount)
+    print("polygon count:", polygonCount)
+    print("vertex count:", vertexCount)
+    print("index count:", indexCount)
+    
+
     return camH.CamRoadDataRaw(
         cameraParametersCount=cameraParameterCount,
         curvesCount=curveCount,
@@ -206,6 +212,8 @@ def createGeometry(f):
     vertex_count = r_u32(f)
     polygon_offset = r_u32(f)
     polygon_count = r_u32(f)
+
+    print(f"Polygons present: {polygon_count}")
 
     return camH.CamRoadGeometry(
         geomName=geomName,

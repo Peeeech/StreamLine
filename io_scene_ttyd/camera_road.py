@@ -135,6 +135,9 @@ class CameraRoadMarker:
 
 	@staticmethod
 	def from_blender_object(blender_object, global_matrix = None):
+		if blender_object is None:
+			return None
+
 		if blender_object.type != 'MESH':
 			return None
 
@@ -319,10 +322,16 @@ class CameraRoadCurve:
 		
 		# Markers
 		marker_base_index = linker.get_section_blob_count("markers")
+		
+		#ignore None-returned ones for final count; some maps use 0 to denote "only" curve
+		validCurves = 0
+
 		for marker in self.markers:
-			marker.link(linker)
+			if marker:
+				marker.link(linker)
+				validCurves += 1
 		struct.pack_into(">L", curve_data, 0xa8, marker_base_index)
-		struct.pack_into(">L", curve_data, 0xac, len(self.markers))
+		struct.pack_into(">L", curve_data, 0xac, validCurves)
 
 		linker.add_blob(curve_blob_name, curve_data)
 		linker.place_blob_in_section(curve_blob_name, "curves")
@@ -374,7 +383,7 @@ class CameraRoadCurve:
 		curve.markers = []
 		marker = CameraRoadMarker.from_blender_object(attr.Marker, global_matrix)
 		if marker is None:
-			raise Exception(f"No marker found for Curve: {curve.name}")
+			print(f"[WARNING] No marker found for Curve: {curve.name}. appending empty!")
 		curve.markers.append(marker)
 
 		return curve

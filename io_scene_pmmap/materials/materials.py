@@ -4,6 +4,16 @@ import re
 import json
 import bpy #type: ignore
 from dataclasses import asdict
+
+
+def checkVisMode():
+    mode = getattr(bpy.types.Scene, "visual_map", None)
+
+    if not mode:
+        raise Exception("[FATAL] Visual Map scene object returned none")
+
+    return bpy.context.scene.visual_map
+
     
 def parseSamplers(samplers):
     return [s for s in samplers if s is not None]
@@ -12,17 +22,15 @@ def build_materials_from_scene(data, images, context=None):
     materials = data.values
     mats = []
 
-    if context:
-        prefix = context.scene.mat_prefix
-
     #Phase 1. Make DMDMaterial containers in their own collection so that everything can be preserved, and then blender-variants can interpret from these
     for i, data in enumerate(materials):
-        matEmpty = bpy.data.objects.new(f"{prefix}{data.name}", None)
+
+
+        matEmpty = bpy.data.objects.new(f"{data.name}", None)
         idProp = matEmpty.ttyd_world_empty
         idProp.isMaterial = True
 
         props = matEmpty.ttyd_world_material
-        props.name = data.name
         props.color = (data.color.r, data.color.g, data.color.b, data.color.a)
 
         if data.matSrc == 0:
@@ -34,7 +42,7 @@ def build_materials_from_scene(data, images, context=None):
 
         props.unk_009 = data.unk_009 #subtract vtex alpha flag?. seems always True for "_v" and "_v_x" mats
 
-        #this blendMode relates to source colors inside nodes, actual 'full-mat-transparency' is dictated per-sampler on unk_0a
+        #this blendMode relates to source colors inside nodes, actual 'full-mat-transparency' is dictated per-sampler on texBlendMode
         if data.blendMode == 0:
             props.blendMode = 'opaque'
         elif data.blendMode == 1: 
@@ -51,14 +59,23 @@ def build_materials_from_scene(data, images, context=None):
             smp = props.textureSamplers.add()
             smp.wrapS = validSamplers[i].wrapS
             smp.wrapT = validSamplers[i].wrapT
-            smp.unk_0a = validSamplers[i].unk_0a
+            smp.texBlendMode = validSamplers[i].texBlendMode
             smp.unk_0b = validSamplers[i].unk_0b
-            
-            smp.texture.image = bpy.data.images.get(f"{prefix}{validSamplers[i].texture.name}")
-            imageEmpty = bpy.data.objects.get(f"{prefix}{validSamplers[i].texture.name}")
-            imageEmpty.ttyd_world_texture.render_order = validSamplers[i].texture.render_order
 
+            #ensure that material draw matches texture draw; or at least that both are transparent
+            try:
+                assertString = f"\n\n\nmat[{data.name}] blend: [{data.blendMode}] | tex blend: [{smp.texBlendMode}]\n\n\n"
+                assert data.blendMode == smp.texBlendMode, assertString
+            except:
+                print(assertString)
+
+            smp.texture.image = bpy.data.images.get(f"{validSamplers[i].texture.name}")
             smp.texture.name = validSamplers[i].texture.name
+            imageEmpty = bpy.data.objects.get(f"{validSamplers[i].texture.name}")
+
+            if not checkVisMode():
+                imageEmpty.ttyd_world_texture.render_order = validSamplers[i].texture.render_order
+
             smp.texture.render_order = validSamplers[i].texture.render_order
             smp.texture.wWidth = validSamplers[i].texture.wWidth
             smp.texture.wHeight = validSamplers[i].texture.wHeight
@@ -74,193 +91,211 @@ def build_materials_from_scene(data, images, context=None):
         props.tevConfig.tevMode = data.tevConfig.tevMode
         
         #Phase 2. Create base blender preview material and append the main one to the empty (extras can be appended on their creation)
-        material = bpy.data.materials.new(f"[DrawMode 0] {prefix}{data.name}")
-        material.show_transparent_back = False
+        makeMaterialPreviewsForEmpty(matEmpty, props, validSamplers=validSamplers)
 
-        ref = props.materialRefs.add()
-        ref.material = material
-        
-        material.use_nodes = True
-        nodes = material.node_tree.nodes
-        links = material.node_tree.links
-
-        nodes.clear()
-
-        output_node = nodes.new("ShaderNodeOutputMaterial")
-        output_node.name = ("Output")
-        output_shader_input = output_node.inputs['Surface']
-
-        #First we're gonna create a node for either VertexColors or an RGB (Material Color) depending on MatSrc
-        if props.matSrc == 'matCol':
-            color0_node = nodes.new("ShaderNodeRGB")
-            color0_node.outputs['Color'].default_value = props.color
-            color0_node_alpha = None
-
-        elif props.matSrc == 'vtxCol':
-            color0_node = nodes.new("ShaderNodeVertexColor")
-            color0_node.layer_name = "Col"
-            color0_node_alpha = color0_node.outputs['Alpha']
-
-        else:
-            print(f"{props.name} failed matSrc check?")
-
-        transparent_node = nodes.new("ShaderNodeBsdfTransparent")
-        transparent_node.name = ("Transparent")
-        transparent_output = transparent_node.outputs['BSDF']
-
-        #NOTE: The blendMode here is used *purely* for Vertex Alpha, so we can set up nodes, but 'blend_method' will only be changed by meshDesc->drawMode
-
-        color0_node.name = "Color0"
-        color0_node_color = color0_node.outputs['Color']
-
-        #Next we're gonna check for the presence of a sampler(s), and create ImageTex nodes depending on which sampler is pulled.
-        # we're gonna pre-emptively make a transparent node per-texCoord and hook it's alpha into it for easy linking purposes
-
-        tex_nodes = []
-
-        for i, sampler in enumerate(validSamplers):
-            tex = nodes.new("ShaderNodeTexImage")
-            tex.image = bpy.data.images.get(f"{prefix}{validSamplers[i].texture.name}")
-            tex.label = f"TEX{i}"
-            tex.name = f"TEX{i}"
-            tex_nodes.append(tex)
-
-        diffuse_node = nodes.new("ShaderNodeBsdfDiffuse")
-        diffuse_node.name = ("Diffuse")
-        diffuse_input = diffuse_node.inputs['Color']
-        diffuse_output = diffuse_node.outputs['BSDF']
-
-        
-            # Alpha check should be viable at the end, as long as the final color input routes into the Diffuse
-            # BSDF, we can just check for it's input link and for the transparent node data
-
-        #NOTE: It seems that [mat] with no suffix is MaterialRGB (matSrc = 0)
-            # [mat]_v seems to be vertex colors
-            # [mat]_x is presumably vertex alpha
-
-
-        # CASE1: No samplers (matSrc 0 / 1)
-        if len(validSamplers) == 0:
-            color0_node.location = (-250, 0)
-            output_node.location = (250, 0)
-
-            links.new(color0_node_color, diffuse_input)
-            links.new(diffuse_output, output_shader_input)
-            finalShader = diffuse_output
-
-        # CASE2: One sampler (matSrc 0 / 1)
-        if len(validSamplers) >= 1:
-
-            #couple different things seem to need to trigger 'blend' to display properly
-            if props.blendMode == 'full':
-                material.blend_method = 'BLEND'
-
-            #this var seems to track if tex alpha should be subtracted?
-            for i, smp in enumerate(validSamplers):
-                if validSamplers[i].unk_0a == 1:
-                    material.blend_method = 'BLEND' #might supposed to be clip, but some cases display weird artifacts when not on blend
-                elif validSamplers[i].unk_0a == 2:
-                    material.blend_method = 'BLEND'
-
-            texNode0 = nodes.get("TEX0")
-            rgbMath_node0 = nodes.new("ShaderNodeVectorMath")
-            rgbMath_node0.name = ("Color0 Mix")
-            shaderMix_node = nodes.new("ShaderNodeMixShader")
-            shaderMix_node.name = ("Shader Mix")
-            uvmap_node = nodes.new("ShaderNodeUVMap")
-            mapping_node = nodes.new("ShaderNodeMapping")
-            uvmap_node.uv_map = "UVMap"
-            rgbMath_node0.operation = 'MULTIPLY'
-            finalShader = shaderMix_node.outputs['Shader']
-
-            uvmap_node.location = (-1150, 0)
-            mapping_node.location = (-950, -200)
-            output_node.location = (300, 0)
-            texNode0.location = (-500, 0)
-            color0_node.location = (-450, -300)
-            diffuse_node.location = (-50, 0)
-            rgbMath_node0.location = (-225, -200)
-            transparent_node.location = (-50, 100)
-            shaderMix_node.location = (125, 50)
-
-            links.new(color0_node_color, rgbMath_node0.inputs[1])
-            links.new(rgbMath_node0.outputs['Vector'], diffuse_input)            
-            links.new(transparent_output, shaderMix_node.inputs[1])
-            links.new(diffuse_output, shaderMix_node.inputs[2])
-
-            samplerWrapPreview(texNode0, validSamplers[0].wrapS, validSamplers[0].wrapT, nodes, links)
-
-            if color0_node_alpha is not None and props.blendMode == 'full':
-                rgbMath_node1 = nodes.new("ShaderNodeVectorMath")
-                rgbMath_node1.name = ("Alpha0 Mix")
-                rgbMath_node1.operation = 'MULTIPLY'
-                rgbMath_node1.location = (-225, 0)
-
-                links.new(color0_node_alpha, rgbMath_node1.inputs[1])
-                links.new(rgbMath_node1.outputs['Vector'], shaderMix_node.inputs['Fac'])
-            
-            elif props.blendMode == 'full':
-                links.new(texNode0.outputs['Alpha'], shaderMix_node.inputs['Fac'])
-
-            if len(validSamplers) == 1:
-                links.new(texNode0.outputs['Color'], rgbMath_node0.inputs[0])
-
-                if props.blendMode == 'full':
-                    links.new(texNode0.outputs['Alpha'], rgbMath_node1.inputs[0])
-                else:
-                    links.new(texNode0.outputs['Alpha'], shaderMix_node.inputs['Fac'])
-
-            if len(validSamplers) == 2:
-                texNode1 = nodes.get("TEX1")
-
-                rgbMath_node2 = nodes.new("ShaderNodeVectorMath")
-                rgbMath_node2.name = ("Color1 Mix")
-                rgbMath_node3 = nodes.new("ShaderNodeVectorMath")
-                rgbMath_node3.name = ("Alpha1 Mix")
-                mapping2_node = nodes.new("ShaderNodeMapping")
-                uvmap2_node = nodes.new("ShaderNodeUVMap")
-                uvmap2_node.uv_map = "UVMap.001"
-
-                texNode1.location = (-750, 300)
-                texNode0.location = (-750, 0)
-                rgbMath_node2.location = (-450, 300)
-                rgbMath_node3.location = (-450, 0)
-                mapping2_node.location = (mapping_node.location.x, (mapping_node.location.y + 500))
-                uvmap2_node.location = (uvmap_node.location.x,(uvmap_node.location.y + 500))
-                
-                samplerWrapPreview(texNode1, validSamplers[1].wrapS, validSamplers[1].wrapT, nodes, links)
-
-                links.new(texNode0.outputs['Color'], rgbMath_node2.inputs[0])
-                links.new(texNode1.outputs['Color'], rgbMath_node2.inputs[1])
-                links.new(texNode0.outputs['Alpha'], rgbMath_node3.inputs[0])
-                links.new(texNode1.outputs['Alpha'], rgbMath_node3.inputs[1])
-                links.new(rgbMath_node2.outputs['Vector'], rgbMath_node0.inputs[0])
-                if props.blendMode == 'full':
-                    links.new(rgbMath_node3.outputs['Vector'], rgbMath_node1.inputs[0])
-                else:
-                    links.new(rgbMath_node3.outputs['Vector'], shaderMix_node.inputs['Fac'])
-            elif len(validSamplers) > 2:
-                print(f"more than two samplers found on:{data.name}: {len(validSamplers)}")             
-
-            links.new(finalShader, output_shader_input)
+        if checkVisMode():
+            bpy.data.objects.remove(matEmpty)
+            continue
 
         mats.append(matEmpty)
-    
-    scene = bpy.context.scene
-    master_collection = scene.collection
 
-    mat_collection = bpy.data.collections.get("Materials")
+    if not checkVisMode():    
+        scene = bpy.context.scene
+        master_collection = scene.collection
 
-    if mat_collection is None:
-        mat_collection = bpy.data.collections.new("Materials")
-        master_collection.children.link(mat_collection)
+        mat_collection = bpy.data.collections.get("Materials")
 
-    for i, mat in enumerate(mats):
-        mat_collection.objects.link(mat)
+        if mat_collection is None:
+            mat_collection = bpy.data.collections.new("Materials")
+            master_collection.children.link(mat_collection)
+
+        for i, mat in enumerate(mats):
+            mat_collection.objects.link(mat)
 
     return materials
 
     #TODO: implement non-(2, 2)-mirror math
+
+def makeMaterialPreviewsForEmpty(empty, props, validSamplers=None):
+    if not checkVisMode():
+        material = bpy.data.materials.new(f"[DrawMode 0] {empty.name}")
+    else:
+        material = bpy.data.materials.new(empty.name)
+
+    material.show_transparent_back = False
+
+    if validSamplers is None:
+        validSamplers = parseSamplers(props.textureSamplers)
+
+    ref = props.materialRefs.add()
+    ref.material = material
+    
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    nodes.clear()
+
+    output_node = nodes.new("ShaderNodeOutputMaterial")
+    output_node.name = ("Output")
+    output_shader_input = output_node.inputs['Surface']
+
+    #First we're gonna create a node for either VertexColors or an RGB (Material Color) depending on MatSrc
+    if props.matSrc == 'matCol':
+        color0_node = nodes.new("ShaderNodeRGB")
+        color0_node.outputs['Color'].default_value = props.color
+        color0_node_alpha = None
+
+    elif props.matSrc == 'vtxCol':
+        color0_node = nodes.new("ShaderNodeVertexColor")
+        color0_node.layer_name = "Col"
+        color0_node_alpha = color0_node.outputs['Alpha']
+
+    else:
+        print(f"{empty.name} failed matSrc check?")
+
+    transparent_node = nodes.new("ShaderNodeBsdfTransparent")
+    transparent_node.name = ("Transparent")
+    transparent_output = transparent_node.outputs['BSDF']
+
+    #NOTE: The blendMode here is used *purely* for Vertex Alpha, so we can set up nodes, but 'blend_method' will only be changed by meshDesc->drawMode
+
+    color0_node.name = "Color0"
+    color0_node_color = color0_node.outputs['Color']
+
+    #Next we're gonna check for the presence of a sampler(s), and create ImageTex nodes depending on which sampler is pulled.
+    # we're gonna pre-emptively make a transparent node per-texCoord and hook it's alpha into it for easy linking purposes
+
+    tex_nodes = []
+
+    for i, sampler in enumerate(validSamplers):
+        tex = nodes.new("ShaderNodeTexImage")
+        tex.image = bpy.data.images.get(f"{validSamplers[i].texture.name}")
+        tex.label = f"TEX{i}"
+        tex.name = f"TEX{i}"
+        tex_nodes.append(tex)
+
+    diffuse_node = nodes.new("ShaderNodeBsdfDiffuse")
+    diffuse_node.name = ("Diffuse")
+    diffuse_input = diffuse_node.inputs['Color']
+    diffuse_output = diffuse_node.outputs['BSDF']
+
+    
+        # Alpha check should be viable at the end, as long as the final color input routes into the Diffuse
+        # BSDF, we can just check for it's input link and for the transparent node data
+
+    #NOTE: It seems that [mat] with no suffix is MaterialRGB (matSrc = 0)
+        # [mat]_v seems to be vertex colors
+        # [mat]_x is presumably vertex alpha
+
+
+    # CASE1: No samplers (matSrc 0 / 1)
+    if len(validSamplers) == 0:
+        color0_node.location = (-250, 0)
+        output_node.location = (250, 0)
+
+        links.new(color0_node_color, diffuse_input)
+        links.new(diffuse_output, output_shader_input)
+        finalShader = diffuse_output
+
+    # CASE2: One sampler (matSrc 0 / 1)
+    if len(validSamplers) >= 1:
+
+        #couple different things seem to need to trigger 'blend' to display properly
+        if props.blendMode == 'full':
+            material.blend_method = 'BLEND'
+
+        #this var seems to track if tex alpha should be subtracted?
+        for i, smp in enumerate(validSamplers):
+            if validSamplers[i].texBlendMode == 1:
+                material.blend_method = 'CLIP'
+            elif validSamplers[i].texBlendMode == 2:
+                material.blend_method = 'BLEND'
+
+        texNode0 = nodes.get("TEX0")
+        rgbMath_node0 = nodes.new("ShaderNodeVectorMath")
+        rgbMath_node0.name = ("Color0 Mix")
+        shaderMix_node = nodes.new("ShaderNodeMixShader")
+        shaderMix_node.name = ("Shader Mix")
+        uvmap_node = nodes.new("ShaderNodeUVMap")
+        mapping_node = nodes.new("ShaderNodeMapping")
+        uvmap_node.uv_map = "UVMap"
+        rgbMath_node0.operation = 'MULTIPLY'
+        finalShader = shaderMix_node.outputs['Shader']
+
+        uvmap_node.location = (-1150, 0)
+        mapping_node.location = (-950, -200)
+        output_node.location = (300, 0)
+        texNode0.location = (-500, 0)
+        color0_node.location = (-450, -300)
+        diffuse_node.location = (-50, 0)
+        rgbMath_node0.location = (-225, -200)
+        transparent_node.location = (-50, 100)
+        shaderMix_node.location = (125, 50)
+
+        links.new(color0_node_color, rgbMath_node0.inputs[1])
+        links.new(rgbMath_node0.outputs['Vector'], diffuse_input)            
+        links.new(transparent_output, shaderMix_node.inputs[1])
+        links.new(diffuse_output, shaderMix_node.inputs[2])
+
+        samplerWrapPreview(texNode0, validSamplers[0].wrapS, validSamplers[0].wrapT, nodes, links)
+
+        if props.blendMode == 'full':
+            rgbMath_node1 = nodes.new("ShaderNodeVectorMath")
+            rgbMath_node1.name = ("Alpha0 Mix")
+            rgbMath_node1.operation = 'MULTIPLY'
+            rgbMath_node1.location = (-225, 0)
+
+            if color0_node_alpha:
+                links.new(color0_node_alpha, rgbMath_node1.inputs[1])
+ 
+            links.new(rgbMath_node1.outputs['Vector'], shaderMix_node.inputs['Fac'])
+        
+        elif props.blendMode == 'full':
+            links.new(texNode0.outputs['Alpha'], shaderMix_node.inputs['Fac'])
+
+        if len(validSamplers) == 1:
+            links.new(texNode0.outputs['Color'], rgbMath_node0.inputs[0])
+
+            if props.blendMode == 'full':
+                links.new(texNode0.outputs['Alpha'], rgbMath_node1.inputs[0])
+            else:
+                links.new(texNode0.outputs['Alpha'], shaderMix_node.inputs['Fac'])
+
+        if len(validSamplers) == 2:
+            texNode1 = nodes.get("TEX1")
+
+            rgbMath_node2 = nodes.new("ShaderNodeVectorMath")
+            rgbMath_node2.name = ("Color1 Mix")
+            rgbMath_node3 = nodes.new("ShaderNodeVectorMath")
+            rgbMath_node3.name = ("Alpha1 Mix")
+            mapping2_node = nodes.new("ShaderNodeMapping")
+            uvmap2_node = nodes.new("ShaderNodeUVMap")
+            uvmap2_node.uv_map = "UVMap.001"
+
+            texNode1.location = (-750, 300)
+            texNode0.location = (-750, 0)
+            rgbMath_node2.location = (-450, 300)
+            rgbMath_node3.location = (-450, 0)
+            mapping2_node.location = (mapping_node.location.x, (mapping_node.location.y + 500))
+            uvmap2_node.location = (uvmap_node.location.x,(uvmap_node.location.y + 500))
+            
+            samplerWrapPreview(texNode1, validSamplers[1].wrapS, validSamplers[1].wrapT, nodes, links)
+
+            links.new(texNode0.outputs['Color'], rgbMath_node2.inputs[0])
+            links.new(texNode1.outputs['Color'], rgbMath_node2.inputs[1])
+            links.new(texNode0.outputs['Alpha'], rgbMath_node3.inputs[0])
+            links.new(texNode1.outputs['Alpha'], rgbMath_node3.inputs[1])
+            links.new(rgbMath_node2.outputs['Vector'], rgbMath_node0.inputs[0])
+            if props.blendMode == 'full':
+                links.new(rgbMath_node3.outputs['Vector'], rgbMath_node1.inputs[0])
+            else:
+                links.new(rgbMath_node3.outputs['Vector'], shaderMix_node.inputs['Fac'])
+        elif len(validSamplers) > 2:
+            print(f"more than two samplers found on:{data.name}: {len(validSamplers)}")             
+
+        links.new(finalShader, output_shader_input)
+
 
 def samplerWrapPreview(texNode, S, T, nodes, links):
 

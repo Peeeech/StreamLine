@@ -232,7 +232,7 @@ class DmdTexCoord:
 class DmdSampler:
 	wrapS: int
 	wrapT: int
-	unk0a: int
+	texBlendMode: int
 	unk0b: int
 	textureName: str
 	texCoord: DmdTexCoord
@@ -248,7 +248,7 @@ def convertMatSrc(matsrc):
 def convertBlendMode(blendmode):
 	if blendmode == 'opaque':
 		return 0
-	elif blendmode == 'unk':
+	elif blendmode == 'clip':
 		return 1
 	elif blendmode == 'full':
 		return 2
@@ -317,7 +317,7 @@ class DmdMaterial:
 			linker.add_relocation(sampler_blob_name, 0x0, texture_blob_name)
 
 			struct.pack_into(">BB", sampler_data, 0x8, sampler.wrapS, sampler.wrapT)
-			struct.pack_into(">BB", sampler_data, 0xa, sampler.unk0a, sampler.unk0b)
+			struct.pack_into(">BB", sampler_data, 0xa, sampler.texBlendMode, sampler.unk0b)
 
 			linker.add_blob(sampler_blob_name, sampler_data)
 			linker.place_blob_in_section(sampler_blob_name, "sampler_data")
@@ -385,7 +385,7 @@ class DmdMaterial:
 	def from_blender_material(ttyd_material_object):
 		material = DmdMaterial()
 		materialProps = ttyd_material_object.ttyd_world_material
-		material.name = materialProps.name
+		material.name = ttyd_material_object.name
 		material.color = materialProps.color
 		material.matSrc = materialProps.matSrc
 		material.unk009 = materialProps.unk_009
@@ -414,7 +414,7 @@ class DmdMaterial:
 			dmd_sampler = DmdSampler(
 				wrapS=sampler.wrapS,
 				wrapT=sampler.wrapT,
-				unk0a=sampler.unk_0a,
+				texBlendMode=sampler.texBlendMode,
 				unk0b=sampler.unk_0b,
 				textureName=img.name,
 				texCoord=dmd_texcoord
@@ -878,21 +878,16 @@ class DmdModel:
 		# ------------------------------------------------------------
 		materialEmpty = props.emptyMaterial
 		dmd_material = None
-
-		matNames = []
-
+		
+		
 		for m in materials:
+			#print(m)
 			if m.name == materialEmpty.name:
 				dmd_material = m
-				#print(m.name)
 				break
-				
-			matNames.append(m.name)
 
 		if dmd_material is None:
 			print(f"[WARNING] Material missing for '{blender_object.name}', creating fallback")
-			
-			print(f"    Expected material from materials: {matNames}\n    Had {materialEmpty.name}")
 			dmd_material = DmdMaterial.from_blender_material(materialEmpty)
 			materials.append(dmd_material)
 
@@ -999,7 +994,7 @@ class DmdJoint:
 		self.translation = (0.0, 0.0, 0.0)
 		self.rotation = (0.0, 0.0, 0.0)
 		self.scale = (1.0, 1.0, 1.0)
-		self.anim_delta = (0.0, 0.0, 0.0)
+		self.anim_pivot = (0.0, 0.0, 0.0)
 
 		self.hit_attribute_flags = 0
 
@@ -1122,8 +1117,15 @@ class DmdJoint:
 		return mapping
 
 	@staticmethod
-	def from_blender_object(blender_object, materials, global_matrix = None, is_hit=False):
+	def from_blender_object(blender_object, materials, global_matrix = None, is_hit=False, roots=None):
 		
+		if not (roots and (roots[0] in blender_object.users_collection or roots[1] in blender_object.users_collection)):
+			print(f"[WARNING] Deprecated object scanned; not in Map or Hit col."
+					f"\n    Object: {blender_object.name}"
+					f"\n    Collections: {[c.name for c in blender_object.users_collection]}")
+			return
+
+
 		def _require_local_ir(obj):
 			props = obj.ttyd_world_mesh
 			if not props.local_vertices or not props.local_primitives:
@@ -1153,7 +1155,9 @@ class DmdJoint:
 		for c in blender_object.children:
 			if _is_fragment(c):
 				continue
-			joint.children.append(DmdJoint.from_blender_object(c, materials, None, is_hit))
+			child_joint = DmdJoint.from_blender_object(c, materials, None, is_hit, roots)
+			if child_joint is not None:
+				joint.children.append(child_joint)
 
 		# Transform
 		bpy.context.view_layer.update()
@@ -1170,7 +1174,11 @@ class DmdJoint:
 		joint.translation = (float(t.x), float(t.y), float(t.z))
 
 		e = r.to_euler('XYZ')  # keep this consistent with import
-		joint.rotation = (math.degrees(e.x), math.degrees(e.y), math.degrees(e.z))
+		rx = normalize_deg_360(math.degrees(e.x))
+		ry = normalize_deg_360(math.degrees(e.y))
+		rz = normalize_deg_360(math.degrees(e.z))
+
+		joint.rotation = (rx, ry, rz)
 
 		joint.scale = (float(s.x), float(s.y), float(s.z))
 
@@ -1322,9 +1330,9 @@ class DmdAnimation:
 					("translation", 3),
 					("rotation", 3),
 					("scale", 3),
-					("anim_delta1", 3),
+					("anim_pivot1", 3),
 					(None, 3), # unk
-					("anim_delta2", 3),
+					("anim_pivot2", 3),
 					(None, 3), # unk
 				],
 				0x58 # header size
@@ -1711,7 +1719,7 @@ class DmdAnimation:
 		return False
 
 	@staticmethod
-	def build_transform_track_from_action(obj, origin_loc, origin_rot_rad, origin_scl, anim_origin, anim_rotation, anim_scale, anim_delta, action, length=None):
+	def build_transform_track_from_action(obj, origin_loc, origin_rot_rad, origin_scl, anim_origin, anim_rotation, anim_scale, anim_pivot, action, length=None):
 		blender_fcurve_mapping = {
 			("location", 0): ("translation", 0),
 			("location", 1): ("translation", 1),
@@ -1724,9 +1732,9 @@ class DmdAnimation:
 			("scale", 2): ("scale", 2),
 		}
 
-		anim_loc = (origin_loc[0] - anim_delta[0], 
-			  		origin_loc[1] - anim_delta[1], 
-					origin_loc[2] - anim_delta[2])
+		anim_loc = (origin_loc[0] - anim_pivot[0], 
+			  		origin_loc[1] - anim_pivot[1], 
+					origin_loc[2] - anim_pivot[2])
 		anim_rot = (math.degrees(origin_rot_rad[0]),
 					math.degrees(origin_rot_rad[1]),
 					math.degrees(origin_rot_rad[2]))
@@ -1766,15 +1774,15 @@ class DmdAnimation:
 				v, tin, tout, step = kf["scale"][i]
 				kf["scale"][i] = (v, tin, tout, step)
 
-			kf["anim_delta1"] = [(anim_delta[i], 0.0, 0.0, False) for i in range(3)]
-			kf["anim_delta2"] = [(anim_delta[i], 0.0, 0.0, False) for i in range(3)]
+			kf["anim_pivot1"] = [(anim_pivot[i], 0.0, 0.0, False) for i in range(3)]
+			kf["anim_pivot2"] = [(anim_pivot[i], 0.0, 0.0, False) for i in range(3)]
 
 		track = {
 			"joint_name": obj.name,
 			"translation_origin": (anim_origin[0], anim_origin[1], anim_origin[2]),
 			"rotation_origin": anim_rot,  # degrees (matches keyframes now)
 			"scale_origin": anim_scl,
-			"position_delta": (anim_delta[0], anim_delta[1], anim_delta[2]),
+			"position_delta": (anim_pivot[0], anim_pivot[1], anim_pivot[2]),
 			"keyframes": keyframes,
 		}
 
@@ -1938,7 +1946,7 @@ class DmdAnimation:
 			origin_rot_rad = (float(t.joint.rotation_euler.x), float(t.joint.rotation_euler.y), float(t.joint.rotation_euler.z))
 			origin_scl = (float(t.joint.scale.x), float(t.joint.scale.y), float(t.joint.scale.z))
 
-			tr = DmdAnimation.build_transform_track_from_action(t.joint, origin_loc, origin_rot_rad, origin_scl, t.anim_origin, t.anim_rotation, t.anim_scale, t.anim_delta, t.action, length=anim.length)
+			tr = DmdAnimation.build_transform_track_from_action(t.joint, origin_loc, origin_rot_rad, origin_scl, t.anim_origin, t.anim_rotation, t.anim_scale, t.anim_pivot, t.action, length=anim.length)
 			if tr is not None:
 				anim.joint_transform_tracks.append(tr)
 				
@@ -2073,39 +2081,44 @@ class DmdFile:
 		for emptyMat in file.material_collection.objects:
 			dmd_material = DmdMaterial.from_blender_material(emptyMat)
 			file.materials.append(dmd_material)
+			print(dmd_material.name)
 
 		hit_root = settings["hit_root"].objects[0]
 		map_root = settings["map_root"].objects[0]
 
-		if len(hit_root.children) > 1:
-			print("hit_root has more than one secondary root. This should probably be a failstate.")
-
-		if len(map_root.children) > 1:
-			print("map_root has more than one secondary root. This should probably be a failstate.")
+		roots = [settings["map_root"], settings["hit_root"]]
 
 		file.map_joint = DmdJoint.from_blender_object(
 			map_root,
 			file.materials,
 			global_matrix,
-			False
+			False,
+			roots
 		)
 		file.hit_joint = DmdJoint.from_blender_object(
 			hit_root,
 			file.materials,
 			global_matrix,
-			True if file.collapse_hit else False
+			True if file.collapse_hit else False,
+			roots
 		)
 		file.lights = DmdLight.from_blender_light(
 			settings["light_root"],
 			global_matrix
 		)
 
+		global mapRootName
+		global hitRootName
+
+		mapRootName = map_root.name
+		hitRootName = hit_root.name
+
 		if world_name:
-			file.hit_joint.name = f"{world_name}_A"
-			file.map_joint.name = f"{world_name}_S"
+			file.hit_joint.name = f"{world_name}_{hit_root.name}"
+			file.map_joint.name = f"{world_name}_{map_root.name}"
 		else:
-			file.hit_joint.name = "A"
-			file.map_joint.name = "S"
+			file.hit_joint.name = f"{hit_root.name}"
+			file.map_joint.name = f"{map_root.name}"
 
 		file.root_joint.children = [
 			file.hit_joint,
@@ -2145,11 +2158,11 @@ class DmdFile:
 		linker.add_relocation(information_table_blob_name, 0x04, root_joint_blob_name) # World root
 		
 		if world_name:
-			linker.add_string(information_table_blob_name, 0x08, f"{world_name}_S")
-			linker.add_string(information_table_blob_name, 0x0c, f"{world_name}_A")
+			linker.add_string(information_table_blob_name, 0x08, f"{world_name}_{mapRootName}")
+			linker.add_string(information_table_blob_name, 0x0c, f"{world_name}_{hitRootName}")
 		else:
-			linker.add_string(information_table_blob_name, 0x08, f"S")
-			linker.add_string(information_table_blob_name, 0x0c, f"A")
+			linker.add_string(information_table_blob_name, 0x08, f"{mapRootName}")
+			linker.add_string(information_table_blob_name, 0x0c, f"{hitRootName}")
 
 		date_text = datetime.datetime.utcnow().strftime("%y/%m/%d %H:%M:%S")
 		linker.add_string(information_table_blob_name, 0x10, date_text)
@@ -2165,14 +2178,24 @@ class DmdFile:
 		link_reference_table(linker, "curve_table", "curve_table", [])
 
 		# Fog table
-		# todo-blender_io_ttyd: Expose fog settings to user
 		fog_table_blob_name = "fog_table"
 		fog_table_data = bytearray(0x14)
-		struct.pack_into(">L", fog_table_data, 0x00, 0) # Fog enabled
-		struct.pack_into(">L", fog_table_data, 0x04, 0) # Fog mode
-		struct.pack_into(">f", fog_table_data, 0x08, 0) # Fog start
-		struct.pack_into(">f", fog_table_data, 0x0c, 1000) # Fog end
-		struct.pack_into(">L", fog_table_data, 0x10, 0x000000FF) # Fog color
+
+		if hasattr(bpy.types.Scene, "ttyd_fog_table"):
+			fog_props = bpy.context.scene.ttyd_fog_table
+			struct.pack_into(">L", fog_table_data, 0x00, fog_props.fogEnabled)
+			struct.pack_into(">L", fog_table_data, 0x04, fog_props.fogMode)
+			struct.pack_into(">f", fog_table_data, 0x08, fog_props.fogStart)
+			struct.pack_into(">f", fog_table_data, 0x0C, fog_props.fogEnd)
+			struct.pack_into(">BBBB", fog_table_data, 0x10, int(fog_props.fogColor[0] * 255), int(fog_props.fogColor[1] * 255), int(fog_props.fogColor[2] * 255), int(fog_props.fogColor[3]) * 255)
+
+		else:
+			print("\n\n[WARNING]: FAILED TO GRAB FOG_TABLE. EXPORTING EMPTY\n\n")
+			struct.pack_into(">L", fog_table_data, 0x00, 0) # Fog enabled
+			struct.pack_into(">L", fog_table_data, 0x04, 0) # Fog mode
+			struct.pack_into(">f", fog_table_data, 0x08, 0) # Fog start
+			struct.pack_into(">f", fog_table_data, 0x0c, 1000) # Fog end
+			struct.pack_into(">L", fog_table_data, 0x10, 0x000000FF) # Fog color
 		linker.add_blob(fog_table_blob_name, fog_table_data)
 		linker.place_blob_in_section(fog_table_blob_name, "fog_table")
 
