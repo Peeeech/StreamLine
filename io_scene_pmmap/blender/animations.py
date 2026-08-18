@@ -26,9 +26,9 @@ def build_anims_from_scene(data, matprefix="", context=None):
     scene = bpy.context.scene if context is None else context.scene
     master_collection = scene.collection
 
-    anim_collection = bpy.data.collections.get("Animations")
+    anim_collection = bpy.data.collections.get(f"{matprefix}Animations")
     if anim_collection is None:
-        anim_collection = bpy.data.collections.new("Animations")
+        anim_collection = bpy.data.collections.new(f"{matprefix}Animations")
         master_collection.children.link(anim_collection)
 
     for anim_idx, bundle in enumerate(data.values):
@@ -115,6 +115,7 @@ def build_anims_from_scene(data, matprefix="", context=None):
                             blenderTrack.action = action
 
                 if blenderTrack.action is None:
+                    print(f"\ndummy creation? could be bad.\n{mat}{mat_v}{mat_v_x}\n{matprefix}{trackName}\n\n")
                     dummy = make_matuv_action(i, None, samplerIndex, trackName, track)
                     blenderTrack.action = dummy
 
@@ -170,6 +171,11 @@ def build_anims_from_scene(data, matprefix="", context=None):
                 blenderTrack.name = f"{matprefix}{trackName}"
                 light = blenderTrack.light = bpy.data.objects.get(f"{matprefix}{trackName}")
 
+                #safeguard for importing with vis mode, as the light "joint" won't exist atp
+                if joint is None:
+                    print(f"[WARNING]: No joint object found for track {trackName} in animation {bundle.name}. Skipping.")
+                    continue
+
                 blenderTrack.keyframeCount = len(track.keyframes)
 
                 #lights don't have these, so use defaults
@@ -190,6 +196,11 @@ def build_anims_from_scene(data, matprefix="", context=None):
                 blenderTrack = lightPTable.tracks.add()
                 blenderTrack.name = f"{matprefix}{trackName}"
                 light = blenderTrack.light = bpy.data.objects.get(f"{matprefix}{trackName}")
+
+                #safeguard for importing with vis mode, as the light won't exist atp
+                if light is None:
+                    print(f"[WARNING]: No joint object found for track {trackName} in animation {bundle.name}. Skipping.")
+                    continue
 
                 blenderTrack.keyframeCount = len(track.keyframes)
 
@@ -266,13 +277,13 @@ def build_transform_action_from_dmd(track, obj, obj_origin, anim_origin, anim_pi
 
             is_step = kf.translation[idx].bStep
 
-            print(obj.name)
+            """print(obj.name)
             print(f"form: " + f"{kf.translation[idx].value} + {obj_origin[idx]} - {anim_origin[idx]}")
             print(f"\n\nFinal: {kf.translation[idx].value + obj_origin[idx] - anim_origin[idx]}")
             print("pivot: " + f"{anim_pivot[idx]}")
-            print("loc: " + f"{obj.location[idx]}")
+            print("loc: " + f"{obj.location[idx]}")"""
 
-            print(f"\nLight {obj.name}\n" if obj.ttyd_world_empty.isLight else f"\nJoint {obj.name}\n")
+            #print(f"\nLight {obj.name}\n" if obj.ttyd_world_empty.isLight else f"\nJoint {obj.name}\n")
 
             insert_hermite_key(
                 fcu,
@@ -379,15 +390,15 @@ def _get_mapping_node(mat: bpy.types.Material, samplerIndex: int):
 def build_matuv_action_from_dmd(trackName, track, mat: bpy.types.Material, samplerIndex: int, action_name: str):
     nt = mat.node_tree
     if nt is None:
-        return None
+        raise
 
     mappingNode = _get_mapping_node(mat, samplerIndex)
     if not mappingNode:
         mappingNode = nt.nodes.get("Mapping")
-        print(f"[UV] No Mapping nodes found on {trackName}-{mat.name} at index {samplerIndex}. Trying to default to smp 0")
+        print(f"[UV] No Mapping nodes found on TRACK:{trackName}-MAT:{mat.name} at index {samplerIndex}. Trying to default to smp 0")
         if not mappingNode:
             print(f"[UV] No Mapping nodes found on {mat.name} with fallback index.")
-            return None
+            raise
 
     node_name = mappingNode.name
 
@@ -492,7 +503,7 @@ def make_matuv_action(track_idx, mat: bpy.types.Material, samplerIndex, trackNam
     
     nt = mat.node_tree
     if nt is None:
-        return
+        raise
 
     ad = nt.animation_data_create()
 
@@ -504,7 +515,7 @@ def make_matuv_action(track_idx, mat: bpy.types.Material, samplerIndex, trackNam
         action_name=f"[UV]{mat.name}_{trackName}_T{track_idx:03d}"
     )
     if action is None:
-        return
+        raise
 
     nla_track = ad.nla_tracks.new()
     nla_track.name = f"UV [{track_idx}] {trackName}"

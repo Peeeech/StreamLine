@@ -18,20 +18,19 @@ def checkVisMode():
 def parseSamplers(samplers):
     return [s for s in samplers if s is not None]
     
-def build_materials_from_scene(data, images, context=None):
+def build_materials_from_scene(data, images, matprefix, context=None):
     materials = data.values
     mats = []
 
     #Phase 1. Make DMDMaterial containers in their own collection so that everything can be preserved, and then blender-variants can interpret from these
     for i, data in enumerate(materials):
 
-
-        matEmpty = bpy.data.objects.new(f"{data.name}", None)
+        matEmpty = bpy.data.objects.new(f"{matprefix}{data.name}", None)
         idProp = matEmpty.ttyd_world_empty
         idProp.isMaterial = True
 
         props = matEmpty.ttyd_world_material
-        props.color = (data.color.r, data.color.g, data.color.b, data.color.a)
+        props.colorWheel = (data.color.r / 255, data.color.g / 255, data.color.b / 255, data.color.a / 255)
 
         if data.matSrc == 0:
             props.matSrc = 'matCol'
@@ -53,8 +52,10 @@ def build_materials_from_scene(data, images, context=None):
             print(f"Material Blend Mode not found on {data.name}. {data.matSrc}")
 
         validSamplers = parseSamplers(data.textureSamplers)
+
         props.numTextures = len(validSamplers)
         props.blendAlphaModulationR = (data.blendAlphaModulationR.r, data.blendAlphaModulationR.g, data.blendAlphaModulationR.b, data.blendAlphaModulationR.a)
+
         for i in range(props.numTextures):
             smp = props.textureSamplers.add()
             smp.wrapS = validSamplers[i].wrapS
@@ -62,16 +63,18 @@ def build_materials_from_scene(data, images, context=None):
             smp.texBlendMode = validSamplers[i].texBlendMode
             smp.unk_0b = validSamplers[i].unk_0b
 
-            #ensure that material draw matches texture draw; or at least that both are transparent
-            try:
+            #TODO: figure out what the hell the correlation between these two is
+            """try:
                 assertString = f"\n\n\nmat[{data.name}] blend: [{data.blendMode}] | tex blend: [{smp.texBlendMode}]\n\n\n"
                 assert data.blendMode == smp.texBlendMode, assertString
             except:
                 print(assertString)
+                continue"""
 
-            smp.texture.image = bpy.data.images.get(f"{validSamplers[i].texture.name}")
+            smp.texture.image = bpy.data.images.get(f"{matprefix}{validSamplers[i].texture.name}")
+            
             smp.texture.name = validSamplers[i].texture.name
-            imageEmpty = bpy.data.objects.get(f"{validSamplers[i].texture.name}")
+            imageEmpty = bpy.data.objects.get(f"{matprefix}{validSamplers[i].texture.name}")
 
             if not checkVisMode():
                 imageEmpty.ttyd_world_texture.render_order = validSamplers[i].texture.render_order
@@ -91,44 +94,46 @@ def build_materials_from_scene(data, images, context=None):
         props.tevConfig.tevMode = data.tevConfig.tevMode
         
         #Phase 2. Create base blender preview material and append the main one to the empty (extras can be appended on their creation)
-        makeMaterialPreviewsForEmpty(matEmpty, props, validSamplers=validSamplers)
+        makeMaterialPreviewsForEmpty(matEmpty, props, matprefix, validSamplers=validSamplers)
 
-        if checkVisMode():
+        #cant do this. breaks UV anims, so we'll make the collection and just hide it
+        """if checkVisMode():
             bpy.data.objects.remove(matEmpty)
-            continue
+            continue"""
 
         mats.append(matEmpty)
 
-    if not checkVisMode():    
-        scene = bpy.context.scene
-        master_collection = scene.collection
+    #    see above
+    """if not checkVisMode():    """
+    scene = bpy.context.scene
+    master_collection = scene.collection
 
-        mat_collection = bpy.data.collections.get("Materials")
+    mat_collection = bpy.data.collections.get(f"{matprefix}Materials")
 
-        if mat_collection is None:
-            mat_collection = bpy.data.collections.new("Materials")
-            master_collection.children.link(mat_collection)
+    if mat_collection is None:
+        mat_collection = bpy.data.collections.new(f"{matprefix}Materials")
+        master_collection.children.link(mat_collection)
 
-        for i, mat in enumerate(mats):
-            mat_collection.objects.link(mat)
+    for i, mat in enumerate(mats):
+        mat_collection.objects.link(mat)
 
     return materials
 
     #TODO: implement non-(2, 2)-mirror math
 
-def makeMaterialPreviewsForEmpty(empty, props, validSamplers=None):
+def makeMaterialPreviewsForEmpty(empty, props, matprefix, validSamplers=None):
     if not checkVisMode():
         material = bpy.data.materials.new(f"[DrawMode 0] {empty.name}")
     else:
-        material = bpy.data.materials.new(empty.name)
-
-    material.show_transparent_back = False
-
-    if validSamplers is None:
-        validSamplers = parseSamplers(props.textureSamplers)
+        material = bpy.data.materials.new(f"{empty.name}")
+        material.show_transparent_back = False
 
     ref = props.materialRefs.add()
     ref.material = material
+
+
+    if validSamplers is None:
+        validSamplers = parseSamplers(props.textureSamplers)
     
     material.use_nodes = True
     nodes = material.node_tree.nodes
@@ -143,7 +148,7 @@ def makeMaterialPreviewsForEmpty(empty, props, validSamplers=None):
     #First we're gonna create a node for either VertexColors or an RGB (Material Color) depending on MatSrc
     if props.matSrc == 'matCol':
         color0_node = nodes.new("ShaderNodeRGB")
-        color0_node.outputs['Color'].default_value = props.color
+        color0_node.outputs['Color'].default_value = props.colorWheel
         color0_node_alpha = None
 
     elif props.matSrc == 'vtxCol':
@@ -170,7 +175,7 @@ def makeMaterialPreviewsForEmpty(empty, props, validSamplers=None):
 
     for i, sampler in enumerate(validSamplers):
         tex = nodes.new("ShaderNodeTexImage")
-        tex.image = bpy.data.images.get(f"{validSamplers[i].texture.name}")
+        tex.image = bpy.data.images.get(f"{matprefix}{validSamplers[i].texture.name}")
         tex.label = f"TEX{i}"
         tex.name = f"TEX{i}"
         tex_nodes.append(tex)
